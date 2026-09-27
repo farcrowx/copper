@@ -217,9 +217,10 @@ static void bring_up_network(void) {
     start_dhcp(ifname);
 }
 
-static void spawn_tty(int tty) {
+/* Start a login shell on a tty. Returns its pid, or -1 if the fork failed. */
+static pid_t spawn_tty(int tty) {
     pid_t pid = fork();
-    if (pid != 0) return;
+    if (pid != 0) return pid;
 
     setsid();
     char dev[32];
@@ -236,7 +237,6 @@ static void spawn_tty(int tty) {
     execl("/bin/sh", "sh", (char *)NULL);
     _exit(1);
 }
-
 int main(void) {
     console_stdio();
 
@@ -268,11 +268,25 @@ int main(void) {
         waitpid(wiz, &wst, 0);
     }
 
-    spawn_tty(1);
+    /* One shell on tty1, and when *it* exits, another. Waiting on any child
+       with waitpid(-1, …) instead meant udhcpc counted too: it is a child of
+       PID 1, it forks the lease script and, with -b, exits a process of its
+       own accord. Every one of those woke the loop and started a second
+       copper-sh, so the first boot printed the banner twice and left two
+       prompts fighting over one tty. Wait on the shell's own pid. */
+    pid_t shell = spawn_tty(1);
     for (;;) {
-        int wst;
-        waitpid(-1, &wst, 0);        /* someone exited — bring the shell back */
-        spawn_tty(1);
+        int st;
+        if (shell <= 0) {
+            /* fork failed; do not spin */
+            sleep(1);
+            shell = spawn_tty(1);
+            continue;
+        }
+        while (waitpid(shell, &st, 0) < 0 && errno == EINTR)
+            ;
+        say("shell on tty1 exited, starting another");
+        shell = spawn_tty(1);
     }
     return 0;                        /* never reached */
 }

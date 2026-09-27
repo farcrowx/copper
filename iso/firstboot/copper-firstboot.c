@@ -209,11 +209,24 @@ int main(void) {
     run("echo '::1 localhost ip6-localhost ip6-loopback' >> /etc/hosts");
     run("/bin/busybox hostname %s", host);
 
-    /* the named user, with copper-sh as their login shell */
+    /* The named user, with copper-sh as their login shell.
+       busybox's adduser takes exactly one -G group; the comma-separated list
+       that GNU useradd accepts is read here as a single group *name*, so the
+       account was never created and the first boot ended with "Couldn't create
+       user" and no home directory. Primary group goes in -G, and the rest are
+       supplementary memberships, which is what addgroup is for. Each of those
+       is allowed to fail: a group the build did not create should not stop a
+       person getting a working account. */
     if (run("/bin/busybox adduser -h /home/%s -s /usr/bin/copper-sh "
-            "-G users,audio,video,dialout,cdrom %s", user, user) != 0) {
+            "-G users %s", user, user) != 0) {
         printf("Couldn't create user %s.\n", user);
         return 1;
+    }
+    {
+        static const char *extra[] = { "audio", "video", "dialout", "cdrom" };
+        size_t i;
+        for (i = 0; i < sizeof extra / sizeof extra[0]; i++)
+            run("/bin/busybox addgroup %s %s", user, extra[i]);
     }
     read_password("Password (for you): ", userpw, sizeof userpw,
                   "Confirm your password: ");
