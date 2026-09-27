@@ -180,7 +180,7 @@ static void start_dhcp(const char *ifname) {
         return;
     /* udhcpc passes its own environment to the lease script and never sets
        PATH itself, so the script needs one to find ip(8). */
-    setenv("PATH", "/sbin:/usr/sbin:/bin:/usr/bin", 1);
+    setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
     snprintf(pidfile, sizeof pidfile, "/run/udhcpc.%s.pid", ifname);
     execl("/sbin/udhcpc", "udhcpc", "-i", ifname, "-b", "-p", pidfile,
           (char *)NULL);
@@ -239,6 +239,12 @@ static pid_t spawn_tty(int tty) {
 }
 int main(void) {
     console_stdio();
+
+    /* Anything spawned from here inherits this, including the login shell, so
+       it has to be right. busybox's applets live in /bin and /sbin; the real
+       GNU tools live in /usr/bin and /usr/sbin, and PATH order decides which
+       one runs. /bin first means busybox wins and the userland is invisible. */
+    setenv("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", 1);
 
     signal(SIGINT, SIG_IGN);
     signal(SIGTERM, SIG_IGN);

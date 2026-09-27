@@ -404,6 +404,47 @@ build_rootfs() {
     exit 1
   fi
 
+  # /usr/bin before /bin, in the profile. busybox's applets are symlinks in
+  # /bin and the real GNU tools are in /usr/bin, and PATH order decides which
+  # one answers to a name. Get it backwards and every grep, tar and sed in a
+  # Copper shell is busybox while the entire userland sits there unused — which
+  # is exactly what happened, and it is invisible from the build: the tools
+  # were installed, the ISO was green, and `tar --version` said "busybox".
+  #
+  # Counting the position of each directory the obvious way does not work:
+  # ${p%%:/bin:*} leaves the string alone when /bin is the last element,
+  # because there is no trailing colon to match, so /usr/bin:/bin compares
+  # equal with itself and a correct profile gets rejected. Walk it instead.
+  path_pos() {   # path_pos <path> <dir> -> 1-based position, 0 if absent
+    local rest="$1" want="$2" i=1 part
+    local IFS=:
+    for part in $rest; do
+      if [ "$part" = "$want" ]; then echo "$i"; return 0; fi
+      i=$((i + 1))
+    done
+    echo 0
+    return 1
+  }
+  local ppath pu pb
+  ppath=$(sed -n 's/^[[:space:]]*\(export \)\?PATH=//p' "$TGT/etc/profile" | head -1)
+  if [ -z "$ppath" ]; then
+    echo "rootfs: /etc/profile does not set PATH" >&2
+    exit 1
+  fi
+  pu=$(path_pos "$ppath" /usr/bin)
+  if [ "$pu" = 0 ]; then
+    echo "rootfs: /etc/profile PATH has no /usr/bin: $ppath" >&2
+    exit 1
+  fi
+  pb=$(path_pos "$ppath" /bin)
+  if [ "$pb" != 0 ] && [ "$pu" -gt "$pb" ]; then
+    echo "rootfs: /etc/profile puts /bin (position $pb) before /usr/bin" >&2
+    echo "        (position $pu), so busybox shadows every GNU tool this" >&2
+    echo "        build installed. PATH is: $ppath" >&2
+    exit 1
+  fi
+  echo "  PATH order ok (/usr/bin at $pu, /bin at $pb): $ppath"
+
   # The overlay is copied onto a $TGT that may have come straight out of the
   # build cache, still holding files from an earlier revision. mkdir -p and cp
   # only ever add, so a file deleted from iso/rootfs-overlay/ would survive

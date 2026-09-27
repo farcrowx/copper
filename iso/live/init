@@ -3,7 +3,12 @@
 # copper live initramfs — find the Copper medium, build a writable overlay
 # on top of the read-only ISO, then hand over to copper-init (our PID 1).
 
-PATH=/bin:/sbin:/usr/bin:/usr/sbin
+# /usr/bin and /usr/sbin before /bin and /sbin: busybox's applets are symlinks
+# in the latter and Copper's real GNU tools are in the former, and this PATH is
+# inherited through switch_root into PID 1 and on into every login shell. With
+# /bin first, busybox answers to every name and the userland this build spends
+# most of its time compiling never runs.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # /dev/console is whichever console= was last on the kernel command line, and
 # it is the only place userspace output goes. On a box with no serial port that

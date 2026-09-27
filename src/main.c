@@ -355,10 +355,58 @@ int b_history(int argc, char **argv) {
 
 /* ---------------------------------------------------------------- */
 
+/* PATH, the way a login shell is supposed to get it.
+   This matters far more than it looks. busybox installs its applets as
+   symlinks in /bin and /sbin; Copper installs the real GNU tools in /usr/bin
+   and /usr/sbin. Whichever directory comes first in PATH wins, so getting the
+   order backwards means a Copper shell quietly runs busybox's grep instead of
+   GNU grep, and the whole userland this build spends most of its time
+   compiling is present but invisible. It was exactly that: `tar --version`
+   answered "tar (busybox)" and `grep --version` said "unknown option".
+
+   /etc/profile is where anyone would expect to change this, so honour a PATH
+   assignment from it and fall back to the same order when it is missing or
+   silent. */
+static void set_up_path(void) {
+    static const char *fallback =
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+    char line[512];
+    FILE *f = fopen("/etc/profile", "r");
+
+    if (f) {
+        while (fgets(line, sizeof line, f)) {
+            char *eq;
+            size_t n;
+            if (line[0] == '#' || line[0] == '\n' || line[0] == ' ')
+                continue;
+            if (strncmp(line, "export PATH=", 12) == 0)
+                eq = line + 12;
+            else if (strncmp(line, "PATH=", 5) == 0)
+                eq = line + 5;
+            else
+                continue;
+            while (*eq == ' ' || *eq == '"' || *eq == '\'') eq++;
+            n = strlen(eq);
+            while (n && (eq[n-1] == '\n' || eq[n-1] == '\r' ||
+                         eq[n-1] == '"' || eq[n-1] == '\'' || eq[n-1] == ' ' ||
+                         eq[n-1] == ';'))
+                n--;
+            if (n == 0) continue;
+            eq[n] = '\0';
+            setenv("PATH", eq, 1);
+            fclose(f);
+            return;
+        }
+        fclose(f);
+    }
+    setenv("PATH", fallback, 1);
+}
+
 int main(void) {
     char *line = NULL;
     size_t cap = 0;
 
+    set_up_path();
     signal(SIGINT, SIG_IGN);             /* ctrl-c must not kill the shell */
     banner();
 
