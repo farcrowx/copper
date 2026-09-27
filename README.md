@@ -22,7 +22,7 @@ Copper Linux                ──  what this repo builds
 
 ## Status
 
-All work currently lives on the **`copper-os`** branch.
+All work currently lives on the **`patch-1`** branch (PR #4).
 
 - **copper-sh — done & verified.** Compiled `-std=c11 -O2 -Wall -Wextra`
   with real GCC 12.2 (0 warnings), ran a 44-command battery under

@@ -39,32 +39,41 @@ fork      https://github.com/farcrowx/copper.git        (push target)
 upstream  https://github.com/Copper-linux/copper.git    (read-only here)
 ```
 
-`patch-1` lives on **`farcrowx/copper`** and is **9 commits ahead of upstream
-`main`**, touching 6 files, +345/-48:
+`patch-1` lives on **`farcrowx/copper`** and is **16 commits ahead of upstream
+`main`**, touching 9 files, +865/-273. The tip is `d5c9463`; the oldest commit
+is the overlay ordering fix, and the newest is the wizard. `git log
+upstream/main..patch-1` is the full list.
 
 ```
-9750dac say it in both places: the screen and the serial log
-2601222 init: ask sysfs what an interface is before handing it to DHCP
-971b6e5 boot: put tty0 last so the screen is /dev/console again
-0cf3fd9 iso: make the build fail on the things it used to ship silently
-b7facc7 init: test for copper-init, not for the symlink pointing at it
-a225b17 boot: send the console somewhere we can actually read it
-307d6b9 iso: pin the script path before the cd, and fail safe in the stamps
-d9b1ce1 iso: stamp stage outputs so a warm cache can't ship a stale one
-3ae61c1 iso: create the overlay dirs after the tmpfs goes over them
+  3ae61c1 iso: create the overlay dirs after the tmpfs goes over them
+  d9b1ce1 iso: stamp stage outputs so a warm cache can't ship a stale one
+  307d6b9 iso: pin the script path before the cd, and fail safe in the stamps
+  a225b17 boot: send the console somewhere we can actually read it
+  b7facc7 init: test for copper-init, not for the symlink pointing at it
+  0cf3fd9 iso: make the build fail on the things it used to ship silently
+  971b6e5 boot: put tty0 last so the screen is /dev/console again
+  2601222 init: ask sysfs what an interface is before handing it to DHCP
+  9750dac say it in both places: the screen and the serial log
+  8cd62bc handoff: rewrite it around what the boot log now proves
+  2e3d2f1 ci: build pull requests, not just pushes
+  cb782a0 Update author name in copper-firstboot.c
+  39b2c9b Merge pull request #1 from 12hrformat/patch-3
+  78ac07a Update README.md
+  40cc758 firstboot: the questions have to be visible to be answered
+  d5c9463 firstboot: create the account, and stop starting extra shells
 ```
 
-**It needs a PR to land.** The only credential on this machine belongs to
-`farcrowx`, and GitHub answers `push=False` for that account on
-`Copper-linux/copper` (`admin=false, pull=true`). Somebody with write access
-has to open `farcrowx:patch-1 → Copper-linux/copper:main`, or take the branch
-and push it up directly.
+**It is on a PR already:** https://github.com/Copper-linux/copper/pull/4,
+`farcrowx:patch-1` → `Copper-linux/copper:main`, CI green. The account that
+opened it cannot push to `Copper-linux/copper` directly — GitHub answers
+`push=False` for `farcrowx` (`admin=false, pull=true`) — so somebody with write
+access still has to merge it, or take the branch and push it up.
 
 To get it:
 
 ```sh
 git fetch upstream fork
-git log --oneline upstream/main..fork/patch-1     # should show the 9 above
+git log --oneline upstream/main..fork/patch-1     # 16 commits
 git checkout -b patch-1 fork/patch-1
 ```
 
@@ -91,24 +100,38 @@ PID 1, DHCP, netmask conversion, default route, resolver — verified on
 hardware, from an artifact that was taken apart and read before it was
 trusted.
 
-**Last known-good ISO:** `copper4.iso`, sha256
-`2355a64008c2aa48554510bc14e790e349191e38c031bab1dffa99cba09b338d`, 57.2 MB,
-from CI run `36242735281` (sha `9750dac`).
+**And it reaches the internet.** From the `copper-sh` prompt on that same
+booted machine:
+
+```
+copper@copper:~$ ping -c 1 1.1.1.1
+PING 1.1.1.1 (1.1.1.1): 56 data bytes
+64 bytes from 1.1.1.1: seq=0 ttl=128 time=25.601 MS
+
+--- 1.1.1.1 ping statistics ---
+1 packets transmitted, 1 packets received, 0% packet loss
+round-trip min/avg/max = 25.601/25.601/25.601 MS
+```
+
+A packet left, crossed the hypervisor's NAT, reached a host on the public
+internet and came back — through our driver's bind, our `SIOCSIFFLAGS` call,
+our DHCP client, our netmask conversion, our default route, and busybox's
+`ping`. Nothing from a host distro took part.
+
+**Last known-good ISO:** `copper6.iso`, sha256
+`2e7e861be74b966d5db42fa2992a79a86f23fce2102d19d0cf1ea4fe6801f9ad`, 57.2 MB,
+from CI run `36305160038` (sha `d5c9463`).
 
 ## What has never run
 
-Two things, and they are the whole remaining risk:
+One thing, and it is a small one:
 
-1. **The first-boot wizard.** `iso/firstboot/copper-firstboot.c` has never been
-   executed on any machine. It compiles clean, and that is all anyone can say.
-   The last thing on the screen during the successful boot was
-   `copper-net: nameserver 192.168.179.2`; nobody has confirmed whether a
-   wizard appeared after it or whether PID 1 dropped straight to a shell. This
-   is the first thing to check, and it is central to the "personalizes like a
-   real distro OOBE" requirement.
-2. **Real internet traffic.** We have an address, a prefix, a default route
-   and a nameserver. Nothing has yet proved that a name resolves or that a TCP
-   connection completes. `ping 1.1.1.1` and a `wget` are still unrun.
+- **DNS resolution.** The ping was a raw IP, which proves routing and not
+  names. `nslookup` and `wget` are still unrun.
+
+The wizard used to be on this list. It has now run, on a real machine, and
+immediately exposed three bugs that no amount of reading the source had found —
+see items 10 to 12 below. That is the argument for booting things.
 
 ---
 
@@ -249,36 +272,94 @@ without naming any of them, and it no longer depends on directory order.
 The old code carried a comment predicting this exact failure. It was right, and
 it was still worth doing properly.
 
+## 10. The wizard's questions were invisible, so it could not be answered
+
+The first time the wizard ever ran, it printed its banner and then appeared to
+hang. It had not hung: stdout is line-buffered to a terminal and every question
+is a `printf` with no trailing newline, so each one sat in the buffer until some
+later newline flushed the lot. The questions then arrived all at once and out
+of order, long after they had been answered — which is how someone trying the
+machine for the first time ended up typing `ping -c 1 1.1.1.1` into a password
+field.
+
+`setvbuf(stdout, NULL, _IONBF, 0)` at the top of `main` fixes the class of it
+rather than the instance. `copper-sh` was already doing the equivalent with an
+`fflush` after its prompt; the lesson had been learned once and not applied the
+second time. `40cc758`.
+
+## 11. Passwords were printed in plain text
+
+Same run: the wizard fell back to echoing passwords, and said so mid-flow.
+`getpass()` wants a controlling terminal and reaches the user through
+`/dev/tty`; this process has a console on fd 0 and never a ctty of its own, so
+it failed every time. Worse, it wrote its prompt somewhere the rest of the
+program could not see, which is half of why item 10 looked the way it did.
+
+Replaced with `read_secret()`, which clears `ECHO` on fd 0 with `termios` and
+puts the old settings back afterwards. Same intent, and the prompt stays on
+stdout where the buffering fix can see it. `40cc758`.
+
+## 12. The account was never created, and PID 1 started two shells
+
+```
+adduser: unknown group users,audio,video,dialout,cdrom
+Couldn't create user yashmit.
+```
+
+busybox's `adduser` takes one `-G` group. The comma-separated list is GNU
+`useradd` syntax, and busybox read the whole string as a single group *name*,
+went looking for a group called `users,audio,video,dialout,cdrom`, did not find
+it, and bailed. Every one of those groups is present in `/etc/group`, which
+makes the message actively misleading — it looks like a missing group when it
+is a syntax mismatch. Primary group in `-G` now; `audio`, `video`, `dialout`
+and `cdrom` added as supplementary memberships with `addgroup`, whose failures
+are deliberately not checked.
+
+The same boot printed the shell banner twice and left two prompts on one line.
+PID 1 waited with `waitpid(-1, …)`, which means *any* child, and udhcpc is a
+child of PID 1: it forks the lease script and, with `-b`, exits processes of
+its own accord. Each one woke the loop and started another `copper-sh`.
+`spawn_tty` returns its pid now and the loop waits on that alone, retrying on
+`EINTR`. `d5c9463`.
+
+Items 10 to 12 are the argument for the rest of this document. All three were
+in code that compiled clean, passed every static check, and had been read
+carefully. None was visible without a person booting the thing.
+
 ---
 
 # Goals
 
 Ordered by what unblocks the most.
 
-## G1 — Confirm the first-boot wizard ⚠️ blocks the identity claim
+## G1 — Confirm the first-boot wizard ✅ done
 
-**Done looks like:** the screen after `copper-net: nameserver …` shows the
-wizard asking for a name, and a `copper-sh` prompt afterwards.
+**Was:** the screen after `copper-net: nameserver …` shows the wizard asking for
+a name, and a `copper-sh` prompt afterwards.
 
-Boot `copper4.iso`, screenshot the window. That is the whole task. Nothing
-downstream — persistence especially — is testable until it is answered, and it
-has never been executed, so expect it to be the next thing to break.
+**Now answered.** It does, and the first run of it found three bugs — invisible
+questions, echoed passwords, and no account created. All three are fixed in
+`d5c9463`; boot `copper6.iso` and answer the eight questions to confirm the
+account and the single banner. That confirmation is still outstanding.
 
-## G2 — Prove the internet, not just DHCP
+## G2 — Prove the internet ⚠️ routing done, names outstanding
 
 **Done looks like:**
 
 ```sh
-ping -c 1 1.1.1.1          # raw IP, no DNS
-nslookup example.com       # resolver works
-wget -O - http://example.com   # HTTP end to end
+ping -c 1 1.1.1.1              # ✅ 64 bytes, 0% loss
+nslookup example.com           # ⬜ not yet run
+wget -O - http://example.com   # ⬜ not yet run
 ```
 
-We have a lease, a route and a resolver. None of the three above has run. The
-cheap version is to add a reachability probe to the lease script's `bound`
-handler so the next log answers it without anyone typing commands; the honest
-version is to run the three commands at a `copper-sh` prompt and paste the
-output.
+Routing is proven on real hardware. The ping used a raw IP, so it says nothing
+about the resolver, and nothing has yet completed a TCP connection.
+
+The cheap version for the rest is to add a reachability probe to the lease
+script's `bound` handler, so every boot log answers it without anyone typing
+commands. The honest version is to run the two commands above and paste the
+output. Both are worth doing; the first is better engineering and the second is
+better evidence.
 
 ## G3 — Static-IP escape hatch
 
@@ -383,8 +464,11 @@ Being precise here matters, because it is easy to mistake "it compiles" for
 
 ## Has never run
 
-- **The first-boot wizard.** Compiles; never executed. G1.
-- **Any real internet traffic.** No `ping`, no `nslookup`, no `wget`. G2.
+- **DNS resolution.** The `ping` proved routing with a raw IP. `nslookup` and
+  `wget` are still unrun.
+
+The wizard *was* on this list until very recently. It now runs, and the first
+real run of it found three bugs — see items 10 to 12.
 
 ## A note on green CI runs
 
