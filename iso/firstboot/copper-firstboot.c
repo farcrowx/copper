@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <termios.h>
 #include <unistd.h>
 
 static void banner(void) {
@@ -67,28 +68,64 @@ static int valid_tz(const char *z) {
     return 1;   /* bare zones (UTC) and paths (America/New_York) both OK */
 }
 
-/* password reading: silent when a tty is available, plain fallback otherwise */
+/* Read one line with echo turned off, for passwords.
+   getpass() is no use here. It wants a controlling terminal and reaches the
+   user through /dev/tty, and this process has a console on fd 0 but never a
+   ctty of its own, so it fails and the fallback printed the password in plain
+   text. It also wrote its prompt somewhere the rest of the program could not
+   see, which is half of why the questions came out invisible.
+
+   Returns 1 if the line was too long, so the caller can say so and retry. */
+static int read_secret(const char *prompt, char *buf, size_t cap) {
+    struct termios saved, quiet;
+    int hushed = 0;
+    int overlong = 0;
+
+    fputs(prompt, stdout);
+    fflush(stdout);
+
+    if (tcgetattr(STDIN_FILENO, &saved) == 0) {
+        quiet = saved;
+        quiet.c_lflag &= (tcflag_t)~ECHO;
+        quiet.c_lflag |= ICANON;
+        if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &quiet) == 0)
+            hushed = 1;
+    }
+    if (!hushed)
+        printf("(could not turn echo off - this will be visible)\n");
+
+    if (!read_line(buf, cap)) {
+        buf[0] = '\0';
+    } else if (strlen(buf) >= cap - 1) {
+        buf[0] = '\0';
+        overlong = 1;
+    }
+
+    if (hushed) {
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved);
+        fputc('\n', stdout);
+        fflush(stdout);
+    }
+    return overlong;
+}
+
+/* password reading: silent when the console allows it, plain and honest when not */
 static void read_password(const char *prompt, char *buf, size_t cap,
                           const char *confirm_prompt) {
     char again[256];
     for (;;) {
-        char *p = getpass(prompt);
-        if (!p) {
-            printf("(no silent input available — type it plainly)\n");
-            if (!read_line(buf, cap)) buf[0] = '\0';
-        } else if (strlen(p) < cap) {
-            snprintf(buf, cap, "%s", p);
+        if (read_secret(prompt, buf, cap)) {
+            printf("That's too long for a password.\n");
+            continue;
         }
 
         if (confirm_prompt) {
-            char *q = getpass(confirm_prompt);
-            if (!q) {
-                if (!read_line(again, sizeof again)) again[0] = '\0';
-            } else if (strlen(q) < sizeof again) {
-                snprintf(again, sizeof again, "%s", q);
+            if (read_secret(confirm_prompt, again, sizeof again)) {
+                printf("That's too long for a password.\n");
+                continue;
             }
             if (buf[0] && strcmp(buf, again) == 0) return;
-            printf("Those didn't match — try again.\n");
+            printf("Those didn't match - try again.\n");
             continue;
         }
         if (buf[0]) return;
@@ -123,6 +160,16 @@ int main(void) {
     char tz[128]    = "UTC";
     char rootpw[256];
     char userpw[256];
+
+    /* Unbuffered, and not because of taste. Every question below is a printf
+       with no trailing newline, and stdout to a terminal is line-buffered, so
+       each one sat in the buffer until some later newline flushed the lot. The
+       first boot of this machine printed "Welcome to Copper Linux" and then
+       appeared to hang, and the questions turned up afterwards all at once and
+       out of order, which is how someone ended up typing "ping -c 1 1.1.1.1"
+       into a password field. A wizard whose questions you cannot see is not a
+       wizard. copper-sh already does the fflush; this is the same lesson. */
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     banner();
 
