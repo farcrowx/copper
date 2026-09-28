@@ -143,7 +143,8 @@ require_kernel_config() {
       VT VGA_CONSOLE UNIX98_PTYS \
       EXT4_FS BLK_DEV_SD ATA ATA_PIIX BLK_DEV_NVME \
       VIRTIO_PCI VIRTIO_BLK \
-      NET NETDEVICES INET PACKET UNIX E1000 E1000E VIRTIO_NET ; do
+      NET NETDEVICES INET PACKET UNIX E1000 E1000E VIRTIO_NET \
+      WIRELESS CFG80211 MAC80211 MT7921E ; do
     grep -qx "CONFIG_$sym=y" "$cfg" || missing="$missing $sym"
   done
   if [ -n "$missing" ]; then
@@ -174,9 +175,16 @@ build_kernel() {
       --enable VMXNET3 --enable VMWARE_VMXNET3 \
       --enable ATA --enable ATA_PIIX --enable BLK_DEV_SD --enable BLK_DEV_NVME \
       --enable EXT4_FS --enable PACKET --enable UNIX --enable VT \
-      --enable VGA_CONSOLE --enable INPUT
+      --enable VGA_CONSOLE --enable INPUT \
+      --enable WIRELESS --enable WIRELESS_EXT --enable CFG80211 \
+      --enable MAC80211 --enable RFKILL --enable RFKILL_INPUT \
+      --enable MT7921E --enable MT7921U
     # vmxnet3 was renamed at some point around 6.12; asking for both names
     # costs nothing, since kconfig drops whichever one doesn't exist.
+    # The wireless set is the same bargain, and the same trap: MT7921E is the
+    # PCIe variant (what the test laptop has) and MT7921U the USB one, and both
+    # `depends on MAC80211`, so without CFG80211 and MAC80211 above, kconfig
+    # silently drops both and the kernel comes up with no wifi and no error.
     make olddefconfig
     require_kernel_config "$KD/.config"
     make -j"$JOBS" bzImage
