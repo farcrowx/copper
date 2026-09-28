@@ -215,12 +215,14 @@ build_kernel() {
     # from outside because a bzImage payload is compressed. System.map is the
     # symbol table, uncompressed, and it is the only place that shows whether
     # the driver actually linked into the image we are about to ship.
-    # Names read out of 6.12's own source. The first attempt at this listed
-    # four plausible-looking symbols, three of which do not exist in 6.12 at
-    # all; they are all non-static so they cannot be inlined away, which is
-    # what makes them safe to insist on.
+    # Only non-static names may be insisted on, and that is not a stylistic
+    # point: a static function is invisible to System.map whether or not it
+    # linked, so naming one here fails the build over something that was never
+    # going to appear. The obvious candidates - mt7921_pci_probe,
+    # mt7921e_init_reset, mt7921_dma_init - are all `static` in 6.12, and the
+    # first version of this gate named them and failed on a kernel that had
+    # the driver in it perfectly well.
     require_kernel_symbols "$KD/System.map" \
-      mt7921_pci_probe mt7921e_init_reset mt7921_dma_init \
       mt7921_mcu_parse_response mt7921_rx_check mt7921_queue_rx_skb
     cp arch/x86/boot/bzImage "$TGT/boot/vmlinuz"
   popd >/dev/null
