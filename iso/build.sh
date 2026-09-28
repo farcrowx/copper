@@ -154,6 +154,28 @@ require_kernel_config() {
   echo "kernel: config looks fit to boot and to reach the network"
 }
 
+# CONFIG_FOO=y only says kconfig agreed. This says the code ended up in the
+# image: System.map lists every symbol linked into vmlinux, uncompressed, and
+# a driver that failed to link is invisible there even though the config says
+# otherwise. The bzImage we ship is compressed, so this cannot be checked from
+# the ISO afterwards - it has to be checked here, while the tree still exists.
+require_kernel_symbols() {
+  local map="$1"; shift
+  local sym missing=""
+  if [ ! -r "$map" ]; then
+    echo "kernel: $map is missing, cannot confirm symbols linked" >&2
+    exit 1
+  fi
+  for sym in "$@"; do
+    grep -q " $sym\$\| $sym\\." "$map" || missing="$missing $sym"
+  done
+  if [ -n "$missing" ]; then
+    echo "kernel: these symbols are not in System.map, so they did not link:$missing" >&2
+    exit 1
+  fi
+  echo "kernel: linked, as promised: $*"
+}
+
 build_kernel() {
   # The kernel's real inputs are the version and the scripts/config flags
   # below, and all of those live in this script, hence $SELF.
@@ -188,6 +210,18 @@ build_kernel() {
     make olddefconfig
     require_kernel_config "$KD/.config"
     make -j"$JOBS" bzImage
+    # CONFIG_MT7921E=y is necessary but not sufficient: kconfig can be satisfied
+    # while the driver is dropped, and the shipped vmlinuz cannot be searched
+    # from outside because a bzImage payload is compressed. System.map is the
+    # symbol table, uncompressed, and it is the only place that shows whether
+    # the driver actually linked into the image we are about to ship.
+    # Names read out of 6.12's own source. The first attempt at this listed
+    # four plausible-looking symbols, three of which do not exist in 6.12 at
+    # all; they are all non-static so they cannot be inlined away, which is
+    # what makes them safe to insist on.
+    require_kernel_symbols "$KD/System.map" \
+      mt7921_pci_probe mt7921e_init_reset mt7921_dma_init \
+      mt7921_mcu_parse_response mt7921_rx_check mt7921_queue_rx_skb
     cp arch/x86/boot/bzImage "$TGT/boot/vmlinuz"
   popd >/dev/null
   [ -s "$TGT/boot/vmlinuz" ] || { echo "kernel build failed"; exit 1; }
