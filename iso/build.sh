@@ -395,7 +395,7 @@ build_libnl() {
   LT=$(fetch "https://github.com/thom311/libnl/releases/download/libnl3_9_0/libnl-3.9.0.tar.gz")
   LD=$(unpack "$LT")
   pushd "$LD" >/dev/null
-    ./configure --host=x86_64-linux-musl --prefix=/usr \
+    CC=musl-gcc ./configure --host=x86_64-linux-musl --prefix=/usr \
       --disable-shared --enable-static --disable-nls
     make -j"$JOBS"
     make DESTDIR="$SYSROOT" install
@@ -420,8 +420,10 @@ build_wpa_supplicant() {
   WD=$(unpack "$WT")
   pushd "$WD/wpa_supplicant" >/dev/null
     # Build config: NL80211 driver (modern mac80211 / cfg80211 kernel path),
-    # internal TLS (no OpenSSL), static linkage against musl + the libnl we
-    # just built.  Keep EAP and P2P off — Copper only needs WPA2-Personal.
+    export PKG_CONFIG_DIR=""
+    export PKG_CONFIG_LIBDIR="${SYSROOT}/usr/lib/pkgconfig:${SYSROOT}/usr/share/pkgconfig"
+    export PKG_CONFIG_SYSROOT_DIR="${SYSROOT}"
+
     cat > .config <<EOF
 CONFIG_DRIVER_NL80211=y
 CONFIG_LIBNL32=y
