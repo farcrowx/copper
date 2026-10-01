@@ -63,6 +63,9 @@ jobs:
       - name: Build the command line tools
         run: sudo bash iso/build.sh tools
 
+      - name: Build WiFi utilities
+        run: sudo bash iso/build.sh wifi
+
       - name: Build Copper's own binaries
         run: sudo bash iso/build.sh copper
 
