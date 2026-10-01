@@ -4,8 +4,8 @@
  *
  * No systemd, no init scripts: this IS the init. It mounts the basics
  * (the initramfs already did most of it), applies the hostname, brings the
- * network up, runs the first-boot wizard once, then parks a copper-sh login
- * shell on tty1 and keeps it alive.
+ * network up (DHCP or static, wired or WiFi), runs the first-boot wizard
+ * once, then parks a copper-sh login shell on tty1 and keeps it alive.
  */
 
 #define _GNU_SOURCE
@@ -187,10 +187,215 @@ static void start_dhcp(const char *ifname) {
     _exit(127);
 }
 
+/* -------------------------------------------------------------------- */
+/* G3 — Static IP configuration                                          */
+/* -------------------------------------------------------------------- */
+
+/* Dotted-quad netmask → prefix length.  255.255.255.0 → 24.
+   Returns the prefix [0..32] or -1 if the mask is not a valid contiguous
+   run of ones. */
+static int mask_to_prefix(const char *mask) {
+    unsigned int a = 0, b = 0, c = 0, d = 0;
+    if (sscanf(mask, "%u.%u.%u.%u", &a, &b, &c, &d) != 4) return -1;
+    if (a > 255 || b > 255 || c > 255 || d > 255)            return -1;
+    unsigned long m = (a << 24) | (b << 16) | (c << 8) | d;
+    /* A valid netmask has all 1-bits before all 0-bits — check for gaps. */
+    if (m != 0 && (m & (~m >> 1)) != 0) return -1;
+    int n = 0;
+    while (m & 0x80000000UL) { n++; m <<= 1; }
+    return n;
+}
+
+struct netcfg {
+    char iface[IFNAMSIZ];
+    int  is_static;       /* 1 if method=static was set */
+    char address[64];
+    int  prefix;          /* /N prefix length */
+    char gateway[64];
+    char dns[256];        /* space-separated nameservers */
+};
+
+/*
+ * Parse /etc/network/interfaces.  Format:
+ *
+ *   iface eth0
+ *       method static          # or: method dhcp  (default: dhcp)
+ *       address 192.168.1.100
+ *       netmask 255.255.255.0  # OR: prefix 24
+ *       gateway 192.168.1.1
+ *       dns 1.1.1.1 9.9.9.9   # space-separated
+ *
+ * A missing file, or a file with method=dhcp (or no method line), means
+ * DHCP and parse_netcfg returns 0.  A valid static stanza returns 1 and
+ * fills in *cfg.
+ */
+static int parse_netcfg(struct netcfg *cfg) {
+    FILE *f = fopen("/etc/network/interfaces", "r");
+    if (!f) return 0;
+
+    memset(cfg, 0, sizeof *cfg);
+    char line[256];
+    int in_iface  = 0;
+    int is_static = 0;
+
+    while (fgets(line, sizeof line, f)) {
+        /* strip leading whitespace */
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        /* strip trailing whitespace / newline */
+        size_t n = strlen(p);
+        while (n > 0 && (p[n-1] == '\n' || p[n-1] == '\r' ||
+                         p[n-1] == ' '  || p[n-1] == '\t'))
+            p[--n] = '\0';
+        if (!*p || *p == '#') continue;
+
+        if (strncmp(p, "iface ", 6) == 0) {
+            strncpy(cfg->iface, p + 6, IFNAMSIZ - 1);
+            cfg->iface[IFNAMSIZ - 1] = '\0';
+            in_iface  = 1;
+            is_static = 0;
+            continue;
+        }
+        if (!in_iface) continue;
+
+        if (strcmp(p, "method static") == 0) { is_static = 1; continue; }
+        if (strcmp(p, "method dhcp")   == 0) { is_static = 0; continue; }
+
+        if (strncmp(p, "address ", 8) == 0)
+            strncpy(cfg->address, p + 8, sizeof cfg->address - 1);
+        else if (strncmp(p, "netmask ", 8) == 0) {
+            int plen = mask_to_prefix(p + 8);
+            if (plen >= 0) cfg->prefix = plen;
+        }
+        else if (strncmp(p, "prefix ", 7) == 0)
+            cfg->prefix = atoi(p + 7);
+        else if (strncmp(p, "gateway ", 8) == 0)
+            strncpy(cfg->gateway, p + 8, sizeof cfg->gateway - 1);
+        else if (strncmp(p, "dns ", 4) == 0)
+            strncpy(cfg->dns, p + 4, sizeof cfg->dns - 1);
+    }
+    fclose(f);
+
+    if (is_static && cfg->address[0] && cfg->prefix > 0) {
+        cfg->is_static = 1;
+        return 1;
+    }
+    return 0;
+}
+
+/* Fork+exec a command with a NULL-terminated argument list. Waits for it. */
+static void run_cmd(const char *prog, ...) {
+    const char *args[32];
+    va_list ap;
+    va_start(ap, prog);
+    int n = 0;
+    args[n++] = prog;
+    const char *arg;
+    while ((arg = va_arg(ap, const char *)) != NULL && n < 31)
+        args[n++] = arg;
+    args[n] = NULL;
+    va_end(ap);
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        execvp(args[0], (char *const *)args);
+        _exit(127);
+    }
+    if (pid > 0) { int st; waitpid(pid, &st, 0); }
+}
+
+static void apply_static(const struct netcfg *cfg) {
+    char cidr[80];
+    snprintf(cidr, sizeof cidr, "%s/%d", cfg->address, cfg->prefix);
+
+    say("static: %s on %s", cidr, cfg->iface);
+    run_cmd("ip", "addr", "add", cidr, "dev", cfg->iface, NULL);
+
+    if (cfg->gateway[0]) {
+        say("static: default route via %s", cfg->gateway);
+        run_cmd("ip", "route", "add", "default", "via", cfg->gateway,
+                "dev", cfg->iface, NULL);
+    }
+
+    /* Write resolv.conf from the dns field (space-separated servers). */
+    if (cfg->dns[0]) {
+        FILE *rc = fopen("/etc/resolv.conf", "w");
+        if (rc) {
+            char copy[256];
+            strncpy(copy, cfg->dns, sizeof copy - 1);
+            copy[sizeof copy - 1] = '\0';
+            char *save = NULL;
+            char *tok = strtok_r(copy, " \t", &save);
+            while (tok) {
+                say("static: nameserver %s", tok);
+                fprintf(rc, "nameserver %s\n", tok);
+                tok = strtok_r(NULL, " \t", &save);
+            }
+            fclose(rc);
+        }
+    }
+}
+
+/* -------------------------------------------------------------------- */
+/* G4 — WiFi: wpa_supplicant + wait for association                     */
+/* -------------------------------------------------------------------- */
+
+/* Start wpa_supplicant in the background on a wifi interface.
+   Only runs if /etc/wpa_supplicant.conf exists — written by the firstboot
+   wizard.  If the file is absent the interface is left alone, so DHCP will
+   still run and will either pick up an open network or time out gracefully. */
+static void start_wpa(const char *ifname) {
+    if (access("/etc/wpa_supplicant.conf", R_OK) != 0) {
+        say("wifi: no /etc/wpa_supplicant.conf — skipping association");
+        return;
+    }
+
+    say("wifi: starting wpa_supplicant on %s", ifname);
+    /* ctrl_interface directory: wpa_supplicant creates the socket here. */
+    mkdir("/run/wpa_supplicant", 0700);
+
+    pid_t pid = fork();
+    if (pid != 0) return;   /* parent continues */
+    execl("/usr/sbin/wpa_supplicant", "wpa_supplicant",
+          "-B",                          /* background after startup */
+          "-i", ifname,
+          "-c", "/etc/wpa_supplicant.conf",
+          (char *)NULL);
+    _exit(127);
+}
+
+/* Poll /sys/class/net/<if>/operstate until it reads "up" or timeout_sec
+   elapses.  Returns 1 on association, 0 on timeout. */
+static int wait_assoc(const char *ifname, int timeout_sec) {
+    char path[64];
+    char buf[32];
+    snprintf(path, sizeof path, "/sys/class/net/%s/operstate", ifname);
+    for (int i = 0; i < timeout_sec * 10; i++) {
+        FILE *f = fopen(path, "r");
+        if (f) {
+            if (fgets(buf, sizeof buf, f) && strncmp(buf, "up", 2) == 0) {
+                fclose(f);
+                return 1;
+            }
+            fclose(f);
+        }
+        usleep(100 * 1000);  /* 100 ms */
+    }
+    return 0;
+}
+
+/* -------------------------------------------------------------------- */
+/* Main network bringup                                                   */
+/* -------------------------------------------------------------------- */
+
 /* Nobody has logged in yet, but the box should already be online: raise the
    interface and let DHCP sort out the address, the default route and the
    resolver. Runs in the background, so a slow or absent DHCP server never
-   holds up the first-boot wizard. */
+   holds up the first-boot wizard.
+   G3: if /etc/network/interfaces has a static stanza for this interface,
+       apply it and skip DHCP entirely.
+   G4: if the interface is WiFi, run wpa_supplicant first and wait up to
+       15 s for association before handing off to DHCP. */
 static void bring_up_network(void) {
     char ifname[IFNAMSIZ] = "";
     int tries;
@@ -206,13 +411,31 @@ static void bring_up_network(void) {
             usleep(100 * 1000);
     }
     if (!ifname[0]) {
-        say("no network interface, skipping DHCP");
+        say("no network interface, skipping");
         return;
     }
     if (link_up(ifname) != 0) {
-        say("could not bring up %s, skipping DHCP", ifname);
+        say("could not bring up %s, skipping", ifname);
         return;
     }
+
+    int is_wifi = (iface_type(ifname) == ARPHRD_IEEE80211_RADIOTAP);
+
+    /* G3: check for a static config that names this interface. */
+    struct netcfg cfg;
+    if (parse_netcfg(&cfg) && strcmp(cfg.iface, ifname) == 0) {
+        apply_static(&cfg);
+        return;   /* static address configured — DHCP not needed */
+    }
+
+    /* G4: WiFi needs wpa_supplicant before DHCP can get a lease. */
+    if (is_wifi) {
+        start_wpa(ifname);
+        say("wifi: waiting for association (up to 15 s)");
+        if (!wait_assoc(ifname, 15))
+            say("wifi: no association yet — DHCP will retry in background");
+    }
+
     say("%s is up, asking DHCP for an address", ifname);
     start_dhcp(ifname);
 }
@@ -237,6 +460,7 @@ static pid_t spawn_tty(int tty) {
     execl("/bin/sh", "sh", (char *)NULL);
     _exit(1);
 }
+
 int main(void) {
     console_stdio();
 
@@ -258,8 +482,8 @@ int main(void) {
 
     apply_hostname();
 
-    /* Started before the wizard on purpose: DHCP gets to negotiate while
-       the user is still typing their name. */
+    /* Started before the wizard on purpose: DHCP / wpa_supplicant get to
+       negotiate while the user is still typing their name. */
     bring_up_network();
 
     struct stat st_done;

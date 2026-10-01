@@ -27,6 +27,7 @@ cd "$(dirname "$0")"
 ROOT=$(pwd)
 WORK="$ROOT/work"; OUT="$ROOT/out"; DL="$WORK/downloads"
 SYS="$WORK/sys"            # our toolchain prefix (musl + musl-gcc)
+SYSROOT="$WORK/sysroot"    # staging area for cross-built link-time libs (not shipped in the ISO)
 TGT="$WORK/rootfs"         # copper rootfs staging tree
 JOBS=${JOBS:-$(nproc)}
 export MAKEFLAGS="-j$JOBS"
@@ -46,6 +47,7 @@ STAGE=${1:-all}
 command -v curl >/dev/null || { echo "build.sh: need curl"; exit 1; }
 
 mkdir -p "$DL" "$OUT" "$SYS"/{bin,lib} \
+  "$SYSROOT"/usr/{lib,include} \
   "$TGT"/{bin,sbin,usr/bin,usr/sbin,usr/share,etc,dev,proc,sys,run,tmp,home,root,var/log,mnt,boot}
 
 # The scripts we ship are read by busybox ash on a machine with no shell
@@ -380,6 +382,88 @@ build_tools() {
 }
 
 # ---------------------------------------------------------------
+# 4b. libnl — netlink library needed by wpa_supplicant (NL80211 driver)
+#     Installed to $SYSROOT only (link-time use); not shipped in the ISO.
+# ---------------------------------------------------------------
+build_libnl() {
+  if [ -f "$SYSROOT/usr/lib/libnl-3.a" ] \
+     && stamped_skip "$WORK/libnl.stamp" "$SELF"; then
+    echo "libnl: already built, skipping"; return
+  fi
+  echo "==> libnl"
+  local LT LD
+  LT=$(fetch "https://github.com/thom311/libnl/releases/download/libnl3_9_0/libnl-3.9.0.tar.gz")
+  LD=$(unpack "$LT")
+  pushd "$LD" >/dev/null
+    ./configure --host=x86_64-linux-musl --prefix=/usr \
+      --disable-shared --enable-static --disable-nls
+    make -j"$JOBS"
+    make DESTDIR="$SYSROOT" install
+  popd >/dev/null
+  [ -f "$SYSROOT/usr/lib/libnl-3.a" ] || { echo "libnl build failed"; exit 1; }
+  stamp_set "$WORK/libnl.stamp" "$SELF"
+}
+
+# ---------------------------------------------------------------
+# 4c. wpa_supplicant — WiFi association daemon
+#     Built with CONFIG_TLS=internal (no OpenSSL dep) and linked
+#     statically against musl + libnl.  Binary goes into the rootfs.
+# ---------------------------------------------------------------
+build_wpa_supplicant() {
+  if [ -x "$TGT/usr/sbin/wpa_supplicant" ] \
+     && stamped_skip "$WORK/wpa.stamp" "$SELF"; then
+    echo "wpa_supplicant: already built, skipping"; return
+  fi
+  echo "==> wpa_supplicant"
+  local WT WD
+  WT=$(fetch "https://w1.fi/releases/wpa_supplicant-2.10.tar.gz")
+  WD=$(unpack "$WT")
+  pushd "$WD/wpa_supplicant" >/dev/null
+    # Build config: NL80211 driver (modern mac80211 / cfg80211 kernel path),
+    # internal TLS (no OpenSSL), static linkage against musl + the libnl we
+    # just built.  Keep EAP and P2P off — Copper only needs WPA2-Personal.
+    cat > .config <<EOF
+CONFIG_DRIVER_NL80211=y
+CONFIG_LIBNL32=y
+CONFIG_TLS=internal
+CONFIG_INTERNAL_LIBTOMMATH=y
+CONFIG_NO_RANDOM_POOL=y
+CONFIG_IEEE80211W=y
+CONFIG_WPA_SUPPLICANT=y
+CONFIG_AP=n
+CONFIG_IBSS_RSN=n
+CONFIG_P2P=n
+CONFIG_WIFI_DISPLAY=n
+CONFIG_HS20=n
+CONFIG_INTERWORKING=n
+CONFIG_EAP_PSK=n
+CONFIG_EAP_TLS=n
+CONFIG_EAP_TTLS=n
+CONFIG_EAP_PEAP=n
+CONFIG_EAP_MSCHAPv2=n
+CONFIG_EAP_GTC=n
+CONFIG_EAP_MD5=n
+CONFIG_EAP_FAST=n
+CONFIG_EAP_SIM=n
+CONFIG_EAP_AKA=n
+CONFIG_EAP_SAKE=n
+CONFIG_EAP_GPSK=n
+CONFIG_EAP_PWD=n
+CONFIG_EAP_EKE=n
+CC=musl-gcc
+CFLAGS += -static -O2 -I${SYSROOT}/usr/include/libnl3
+LDFLAGS += -static -L${SYSROOT}/usr/lib
+LIBS += -lnl-3 -lnl-genl-3
+EOF
+    make -j"$JOBS"
+    install -D -m 0755 wpa_supplicant "$TGT/usr/sbin/wpa_supplicant"
+    install -D -m 0755 wpa_cli        "$TGT/usr/sbin/wpa_cli"
+  popd >/dev/null
+  [ -x "$TGT/usr/sbin/wpa_supplicant" ] || { echo "wpa_supplicant build failed"; exit 1; }
+  stamp_set "$WORK/wpa.stamp" "$SELF"
+}
+
+# ---------------------------------------------------------------
 # 5. Copper's own pieces: shell, init (PID 1), first-boot wizard
 # ---------------------------------------------------------------
 build_copper() {
@@ -405,7 +489,8 @@ build_copper() {
   # Say it here, where it costs a second. (The udhcpc lease script is checked
   # in build_rootfs instead — this stage runs before the overlay is copied.)
   local f
-  for f in usr/bin/copper-init usr/bin/copper-sh usr/bin/copper-firstboot; do
+  for f in usr/bin/copper-init usr/bin/copper-sh usr/bin/copper-firstboot \
+            usr/sbin/wpa_supplicant usr/sbin/wpa_cli; do
     if [ ! -x "$TGT/$f" ]; then
       echo "copper: $f is missing from the staged rootfs" >&2
       exit 1
@@ -432,9 +517,19 @@ build_copper() {
 build_rootfs() {
   echo "==> rootfs config"
   cp -a "$ROOT/rootfs-overlay/." "$TGT/"
-  mkdir -p "$TGT/usr/share/zoneinfo" "$TGT/etc/skel"
+  mkdir -p "$TGT/usr/share/zoneinfo" "$TGT/etc/skel" "$TGT/etc/network"
   cp -a /usr/share/zoneinfo/. "$TGT/usr/share/zoneinfo/" 2>/dev/null \
     || echo "  (no host zoneinfo to copy — timezone data will be missing)"
+
+  # WiFi config: root-only read, it contains a plaintext PSK.
+  if [ -f "$TGT/etc/wpa_supplicant.conf" ]; then
+    chmod 0600 "$TGT/etc/wpa_supplicant.conf"
+  fi
+
+  # /var/run -> /run: wpa_supplicant's ctrl_interface and other daemons
+  # use /var/run; /run is the tmpfs we mount at boot. Make them the same.
+  mkdir -p "$TGT/var"
+  ln -sfn /run "$TGT/var/run" 2>/dev/null || true
   # udhcpc execs this the moment a lease lands, and git does not reliably
   # carry the exec bit across platforms, so set it here.
   chmod 0755 "$TGT/usr/share/udhcpc/default.script"
@@ -573,6 +668,8 @@ full() {
   build_musl
   build_busybox
   build_tools
+  build_libnl
+  build_wpa_supplicant
   build_copper
   build_rootfs
   build_initramfs
@@ -583,12 +680,13 @@ case "$STAGE" in
   kernel)     build_kernel ;;
   base)       build_musl; build_busybox ;;
   tools)      build_musl; build_tools ;;
+  wifi)       build_musl; build_libnl; build_wpa_supplicant ;;
   copper)     build_musl; build_copper ;;
   rootfs)     build_rootfs ;;
   initramfs)  build_musl; build_busybox; build_rootfs; build_initramfs ;;
   iso)        build_musl; build_busybox; build_rootfs; build_initramfs; build_iso ;;
   all|"")     full ;;
-  *)          echo "unknown stage: $STAGE (kernel|base|tools|copper|rootfs|initramfs|iso|all)"; exit 2 ;;
+  *)          echo "unknown stage: $STAGE (kernel|base|tools|wifi|copper|rootfs|initramfs|iso|all)"; exit 2 ;;
 esac
 
 echo "==> done"

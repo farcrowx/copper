@@ -1,0 +1,33 @@
+# Copper Linux — /etc/network/interfaces
+# handcrafted by 12hrformat
+#
+# copper-init reads this file at boot to decide how to configure the
+# first usable network interface it finds (wired preferred over WiFi).
+#
+# DEFAULT: DHCP.  If this file is absent or has no "method static" stanza,
+# DHCP runs automatically — you don't need to touch this file for that.
+#
+# STATIC IP: uncomment the block below and fill it in.
+# Replace eth0 with the actual interface name (check `ip link` after boot).
+#
+# iface eth0
+#     method static
+#     address 192.168.1.100
+#     netmask 255.255.255.0
+#     gateway 192.168.1.1
+#     dns 1.1.1.1 9.9.9.9
+#
+# You can also write the prefix length directly:
+#
+# iface eth0
+#     method static
+#     address 192.168.1.100
+#     prefix 24
+#     gateway 192.168.1.1
+#     dns 1.1.1.1 9.9.9.9
+#
+# Notes:
+#   - Only ONE iface block is read — the first one with "method static".
+#   - "dns" takes space-separated nameservers (written to /etc/resolv.conf).
+#   - Restart (or re-run copper-init logic) after editing; changes don't
+#     apply live.

@@ -4,9 +4,10 @@
  * on real distros / Windows. copper-init runs this once (until the marker
  * /etc/copper-firstboot.done exists).
  *
- * Asks for: name, username, hostname, timezone, and passwords (root + the
- * named user). Creates the account via busybox adduser, sets passwords via
- * busybox chpasswd, wires up /etc/localtime.
+ * Asks for: name, username, hostname, timezone, passwords (root + the named
+ * user), and optionally a WiFi network (SSID + PSK → /etc/wpa_supplicant.conf).
+ * Creates the account via busybox adduser, sets passwords via busybox chpasswd,
+ * wires up /etc/localtime.
  *
  * Live-session only for now (the overlay is tmpfs, so it re-runs next
  * boot) — real persistence is a later phase.
@@ -32,8 +33,10 @@ static void banner(void) {
     printf("coming in a later build.)\n\n");
 }
 
+/* Read one line from stdin, strip the trailing newline/CR.
+   Returns 1 on success, 0 on EOF or error. */
 static int read_line(char *buf, size_t cap) {
-    if (!fgets(buf, cap, stdin)) return 0;
+    if (!fgets(buf, (int)cap, stdin)) return 0;
     buf[strcspn(buf, "\r\n")] = '\0';
     return 1;
 }
@@ -69,17 +72,22 @@ static int valid_tz(const char *z) {
 }
 
 /* Read one line with echo turned off, for passwords.
-   getpass() is no use here. It wants a controlling terminal and reaches the
+   getpass() is no use here: it wants a controlling terminal and reaches the
    user through /dev/tty, and this process has a console on fd 0 but never a
    ctty of its own, so it fails and the fallback printed the password in plain
-   text. It also wrote its prompt somewhere the rest of the program could not
-   see, which is half of why the questions came out invisible.
+   text.  It also wrote its prompt somewhere the rest of the program could not
+   see, which was half of why the questions came out invisible.
 
-   Returns 1 if the line was too long, so the caller can say so and retry. */
+   Returns 1 if the line was too long so the caller can say so and retry.
+
+   BUG 6 fix: the previous check was `strlen(buf) >= cap - 1`, which fires
+   when fgets fills the buffer exactly — even on a valid max-length password,
+   because the newline was the (cap-1)th byte and fgets stopped before reading
+   it. The correct test: if fgets ran out of room, there will be no '\n' in
+   the buffer. If a '\n' is present, the whole line fit. */
 static int read_secret(const char *prompt, char *buf, size_t cap) {
     struct termios saved, quiet;
     int hushed = 0;
-    int overlong = 0;
 
     fputs(prompt, stdout);
     fflush(stdout);
@@ -94,11 +102,18 @@ static int read_secret(const char *prompt, char *buf, size_t cap) {
     if (!hushed)
         printf("(could not turn echo off - this will be visible)\n");
 
-    if (!read_line(buf, cap)) {
+    int overlong = 0;
+    if (!fgets(buf, (int)cap, stdin)) {
         buf[0] = '\0';
-    } else if (strlen(buf) >= cap - 1) {
+    } else if (strchr(buf, '\n') == NULL && strlen(buf) == cap - 1) {
+        /* Buffer was full and no newline found: line was truncated.
+           Drain the remainder so the next read starts cleanly. */
+        int c;
+        while ((c = fgetc(stdin)) != '\n' && c != EOF) {}
         buf[0] = '\0';
         overlong = 1;
+    } else {
+        buf[strcspn(buf, "\r\n")] = '\0';
     }
 
     if (hushed) {
@@ -109,7 +124,6 @@ static int read_secret(const char *prompt, char *buf, size_t cap) {
     return overlong;
 }
 
-/* password reading: silent when the console allows it, plain and honest when not */
 static void read_password(const char *prompt, char *buf, size_t cap,
                           const char *confirm_prompt) {
     char again[256];
@@ -118,7 +132,6 @@ static void read_password(const char *prompt, char *buf, size_t cap,
             printf("That's too long for a password.\n");
             continue;
         }
-
         if (confirm_prompt) {
             if (read_secret(confirm_prompt, again, sizeof again)) {
                 printf("That's too long for a password.\n");
@@ -151,6 +164,32 @@ static void set_password(const char *user, const char *pw) {
         fputs(line, p);
         pclose(p);
     }
+}
+
+/* Write /etc/wpa_supplicant.conf from a validated SSID and passphrase.
+   Uses the plaintext passphrase form (psk="...") which wpa_supplicant
+   accepts for WPA2-Personal. The file is 0600 so only root can read it. */
+static void write_wpa_conf(const char *ssid, const char *psk) {
+    FILE *f = fopen("/etc/wpa_supplicant.conf", "w");
+    if (!f) {
+        printf("(could not write /etc/wpa_supplicant.conf - WiFi manual setup needed)\n");
+        return;
+    }
+    fprintf(f,
+        "# Copper Linux — WiFi configuration\n"
+        "# Written by copper-firstboot. Edit this file to add networks.\n"
+        "ctrl_interface=/run/wpa_supplicant\n"
+        "ctrl_interface_group=0\n"
+        "update_config=1\n"
+        "\n"
+        "network={\n"
+        "    ssid=\"%s\"\n"
+        "    psk=\"%s\"\n"
+        "    key_mgmt=WPA-PSK\n"
+        "}\n", ssid, psk);
+    fclose(f);
+    chmod("/etc/wpa_supplicant.conf", 0600);
+    printf("WiFi: /etc/wpa_supplicant.conf written.\n");
 }
 
 int main(void) {
@@ -197,6 +236,22 @@ int main(void) {
         char z[128] = "";
         if (read_line(z, sizeof z) && z[0] && valid_tz(z))
             snprintf(tz, sizeof tz, "%s", z);
+    }
+
+    /* --- WiFi setup -------------------------------------------------- */
+    printf("WiFi network name (SSID) [leave blank to skip]: ");
+    {
+        char ssid[128] = "";
+        if (read_line(ssid, sizeof ssid) && ssid[0]) {
+            char wifipw[256] = "";
+            /* WiFi password: blank is valid for open networks */
+            if (read_secret("WiFi password (blank for open network): ",
+                            wifipw, sizeof wifipw)) {
+                printf("WiFi password too long — skipping WiFi setup.\n");
+            } else {
+                write_wpa_conf(ssid, wifipw);
+            }
+        }
     }
 
     /* --- apply ------------------------------------------------------- */

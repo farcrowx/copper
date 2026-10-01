@@ -226,9 +226,9 @@ static int run_one(char **av) {
     return 127;
 }
 
-static void run_external(char **argv) {
+static int run_external(char **argv) {
     pid_t pid = fork();
-    if (pid < 0) { perror("copper-sh: fork"); return; }
+    if (pid < 0) { perror("copper-sh: fork"); return 1; }
     if (pid == 0) {
         signal(SIGINT, SIG_DFL);
         execvp(argv[0], argv);
@@ -237,6 +237,7 @@ static void run_external(char **argv) {
     }
     int st;
     waitpid(pid, &st, 0);
+    return status_of(st);
 }
 
 static int status_of(int st) {
@@ -250,8 +251,7 @@ static int run_segments(struct cmdseg *cmds, int n) {
     if (n == 1 && !cmds[0].in && !cmds[0].out) {
         const struct builtin *b = builtin_lookup(cmds[0].argv[0]);
         if (b) return b->fn(count_argv(cmds[0].argv), cmds[0].argv);
-        run_external(cmds[0].argv);
-        return 0;
+        return run_external(cmds[0].argv);
     }
 
     int (*pipesd)[2] = NULL;

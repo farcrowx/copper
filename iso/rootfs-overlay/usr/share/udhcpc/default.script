@@ -97,6 +97,11 @@ bound|renew)
     prefix=$(mask_to_prefix "$subnet") || prefix=24
     say "$interface leased $ip/$prefix"
 
+    # Flush any address that was there before (renewals can hand back a
+    # different IP; stacking two addresses on the same interface is silent
+    # but breaks routing in unobvious ways).
+    ip -4 addr flush dev "$interface" 2>/dev/null || true
+
     bcast=""
     [ -n "$broadcast" ] && bcast="broadcast $broadcast"
     ip addr add "$ip/$prefix" $bcast dev "$interface"
