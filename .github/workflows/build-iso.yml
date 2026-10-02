@@ -66,12 +66,14 @@ jobs:
       - name: Build WiFi utilities
         run: sudo bash iso/build.sh wifi > iso/wifi-build.log 2>&1
 
-      - name: Upload WiFi build log on failure
+      - name: Commit WiFi build log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: wifi-build-log
-          path: iso/wifi-build.log
+        run: |
+          git config user.name "CI Log Bot"
+          git config user.email "ci@localhost"
+          git add iso/wifi-build.log
+          git commit -m "ci: upload wifi-build.log"
+          git push origin patch-2
 
       - name: Build Copper's own binaries
         run: sudo bash iso/build.sh copper
