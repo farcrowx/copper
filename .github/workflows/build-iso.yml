@@ -64,16 +64,14 @@ jobs:
         run: sudo bash iso/build.sh tools
 
       - name: Build WiFi utilities
-        run: sudo bash iso/build.sh wifi > iso/wifi-build.log 2>&1
-
-      - name: Commit WiFi build log on failure
-        if: failure()
         run: |
-          git config user.name "CI Log Bot"
-          git config user.email "ci@localhost"
-          git add iso/wifi-build.log
-          git commit -m "ci: upload wifi-build.log"
-          git push origin patch-2
+          if ! sudo bash iso/build.sh wifi > iso/wifi-build.log 2>&1; then
+            echo "::error::WiFi Build Failed!"
+            tail -n 50 iso/wifi-build.log | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          fi
 
       - name: Build Copper's own binaries
         run: sudo bash iso/build.sh copper
