@@ -64,7 +64,14 @@ jobs:
         run: sudo bash iso/build.sh tools
 
       - name: Build WiFi utilities
-        run: sudo bash iso/build.sh wifi
+        run: sudo bash iso/build.sh wifi > iso/wifi-build.log 2>&1
+
+      - name: Upload WiFi build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wifi-build-log
+          path: iso/wifi-build.log
 
       - name: Build Copper's own binaries
         run: sudo bash iso/build.sh copper
