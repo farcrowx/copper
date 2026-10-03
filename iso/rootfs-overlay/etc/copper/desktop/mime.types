@@ -1,0 +1,119 @@
+# Copper Linux — MIME type definitions
+# handcrafted by 12hrformat
+#
+# Maps MIME types to file extensions and descriptions.
+# Format: mime/type    ext1 ext2 ...    Description
+
+application/pdf    pdf    Portable Document Format
+application/zip    zip    ZIP archive
+application/x-tar    tar    TAR archive
+application/x-gzip    gz    Gzip compressed
+application/x-bzip2    bz2    Bzip2 compressed
+application/x-xz    xz    XZ compressed
+application/x-7z-compressed    7z    7-Zip archive
+application/x-rar    rar    RAR archive
+application/json    json    JSON data
+application/xml    xml    XML document
+application/javascript    js    JavaScript source
+application/x-shellscript    sh    Shell script
+application/x-python    py    Python source
+application/x-perl    pl    Perl source
+application/x-c    c    C source
+application/x-c++    cpp cc cxx    C++ source
+application/x-java    java    Java source
+application/x-ruby    rb    Ruby source
+application/x-php    php    PHP source
+application/x-sql    sql    SQL script
+application/x-yaml    yml yaml    YAML document
+application/x-toml    toml    TOML document
+application/x-ini    ini    INI configuration
+application/x-desktop    desktop    Desktop entry
+application/x-executable    bin    Binary executable
+application/x-sharedlib    so    Shared library
+application/x-object    o    Object file
+application/x-archive    ar    AR archive
+application/x-debian-package    deb    Debian package
+application/x-rpm    rpm    RPM package
+application/x-iso9660-image    iso    ISO disk image
+application/x-apple-diskimage    dmg    Apple disk image
+application/x-msdownload    exe dll    Windows executable
+application/vnd.oasis.opendocument.text    odt    OpenDocument Text
+application/vnd.oasis.opendocument.spreadsheet    ods    OpenDocument Spreadsheet
+application/vnd.oasis.opendocument.presentation    odp    OpenDocument Presentation
+application/vnd.openxmlformats-officedocument.wordprocessingml.document    docx    Word document
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet    xlsx    Excel spreadsheet
+application/vnd.openxmlformats-officedocument.presentationml.presentation    pptx    PowerPoint presentation
+application/msword    doc    Word document
+application/vnd.ms-excel    xls    Excel spreadsheet
+application/vnd.ms-powerpoint    ppt    PowerPoint presentation
+application/rtf    rtf    Rich Text Format
+application/epub+zip    epub    EPUB e-book
+application/x-font-ttf    ttf    TrueType font
+application/x-font-otf    otf    OpenType font
+application/font-woff    woff    WOFF font
+application/font-woff2    woff2    WOFF2 font
+application/x-font-pcf    pcf    PCF font
+application/x-font-bdf    bdf    BDF font
+application/x-trash    trash    Trashed file
+application/octet-stream    bin    Binary data
+
+text/plain    txt    Plain text
+text/html    html htm    HTML document
+text/css    css    CSS stylesheet
+text/csv    csv    CSV data
+text/markdown    md markdown    Markdown document
+text/x-readme    readme    README file
+text/x-changelog    changelog    Changelog
+text/x-copying    copying    License text
+text/x-install    install    Install instructions
+text/x-makefile    makefile    Makefile
+text/x-patch    patch diff    Patch file
+text/x-log    log    Log file
+text/x-dbus    dbus    D-Bus introspection
+text/x-gtkrc    gtkrc    GTK configuration
+text/x-xresources    xresources    X resources
+text/x-xdefaults    xdefaults    X defaults
+
+image/png    png    PNG image
+image/jpeg    jpg jpeg    JPEG image
+image/gif    gif    GIF image
+image/bmp    bmp    BMP image
+image/tiff    tiff tif    TIFF image
+image/svg+xml    svg    SVG image
+image/webp    webp    WebP image
+image/x-icon    ico    Icon
+image/x-xpixmap    xpm    XPM image
+image/x-xbitmap    xbm    XBM image
+image/vnd.microsoft.icon    ico    Windows icon
+image/heic    heic    HEIC image
+image/heif    heif    HEIF image
+image/avif    avif    AVIF image
+
+audio/mpeg    mp3    MP3 audio
+audio/ogg    ogg    Ogg audio
+audio/wav    wav    WAV audio
+audio/flac    flac    FLAC audio
+audio/aac    aac    AAC audio
+audio/mp4    m4a    M4A audio
+audio/x-midi    mid midi    MIDI audio
+application/ogg    ogg    Ogg container
+audio/webm    webm    WebM audio
+audio/x-matroska    mka    Matroska audio
+
+video/mp4    mp4    MP4 video
+video/x-matroska    mkv    Matroska video
+video/webm    webm    WebM video
+video/ogg    ogv    Ogg video
+video/quicktime    mov    QuickTime video
+video/x-msvideo    avi    AVI video
+video/x-flv    flv    Flash video
+video/mpeg    mpg mpeg    MPEG video
+video/3gpp    3gp    3GP video
+video/x-ms-wmv    wmv    WMV video
+
+inode/directory    dir    Directory
+inode/symlink    symlink    Symbolic link
+inode/socket    sock    Socket
+inode/fifo    fifo    Named pipe
+inode/chardev    chardev    Character device
+inode/blockdev    blockdev    Block device

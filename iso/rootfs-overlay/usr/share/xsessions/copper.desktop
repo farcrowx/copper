@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Copper
+Comment=Copper Linux Desktop
+Exec=/usr/bin/copper-session
+Type=Application
+DesktopNames=Copper

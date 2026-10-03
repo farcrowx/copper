@@ -1,0 +1,695 @@
+/* Copper Linux — GTK3 CSS theme
+ * handcrafted by 12hrformat
+ *
+ * Clean, minimal design with light and dark variants.
+ * Uses a restrained color palette with subtle borders.
+ */
+
+/* ── Color palette ────────────────────────────────────────────── */
+@define-color copper-bg #f5f5f5;
+@define-color copper-bg-dark #2b2b2b;
+@define-color copper-fg #1a1a1a;
+@define-color copper-fg-dark #e0e0e0;
+@define-color copper-accent #4a90d9;
+@define-color copper-accent-dark #6ab0ff;
+@define-color copper-border #d0d0d0;
+@define-color copper-border-dark #444444;
+@define-color copper-surface #ffffff;
+@define-color copper-surface-dark #333333;
+@define-color copper-text #1a1a1a;
+@define-color copper-text-dark #e0e0e0;
+@define-color copper-text-muted #666666;
+@define-color copper-text-muted-dark #999999;
+@define-color copper-hover #e8e8e8;
+@define-color copper-hover-dark #3a3a3a;
+@define-color copper-active #d6e9f8;
+@define-color copper-active-dark #2a4a6a;
+@define-color copper-selected #4a90d9;
+@define-color copper-selected-dark #6ab0ff;
+@define-color copper-error #d94a4a;
+@define-color copper-warning #d9a04a;
+@define-color copper-success #4ad94a;
+
+/* ── Reset & base ─────────────────────────────────────────────── */
+* {
+    -GtkWidget-focus-line-width: 0;
+    -GtkWidget-focus-padding: 0;
+    outline: none;
+}
+
+window,
+window.background {
+    background-color: @copper-bg;
+    color: @copper-text;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────── */
+button {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+    padding: 6px 12px;
+    margin: 2px;
+    transition: background-color 150ms ease;
+}
+
+button:hover {
+    background-color: @copper-hover;
+    border-color: @copper-accent;
+}
+
+button:active,
+button:checked {
+    background-color: @copper-active;
+    border-color: @copper-accent;
+}
+
+button:disabled {
+    background-color: @copper-bg;
+    color: @copper-text-muted;
+    border-color: @copper-border;
+}
+
+button.suggested-action {
+    background-color: @copper-accent;
+    color: #ffffff;
+    border-color: @copper-accent;
+}
+
+button.suggested-action:hover {
+    background-color: @copper-accent-dark;
+}
+
+button.destructive-action {
+    background-color: @copper-error;
+    color: #ffffff;
+    border-color: @copper-error;
+}
+
+/* ── Entries (text fields) ────────────────────────────────────── */
+entry {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+    padding: 6px 8px;
+    selection-background-color: @copper-selected;
+    selection-color: #ffffff;
+}
+
+entry:focus {
+    border-color: @copper-accent;
+}
+
+entry:disabled {
+    background-color: @copper-bg;
+    color: @copper-text-muted;
+}
+
+/* ── Combo boxes ──────────────────────────────────────────────── */
+combobox {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+combobox:hover {
+    border-color: @copper-accent;
+}
+
+/* ── Menus ────────────────────────────────────────────────────── */
+menu,
+.menu {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+    padding: 4px;
+}
+
+menuitem {
+    padding: 6px 12px;
+    border-radius: 3px;
+}
+
+menuitem:hover {
+    background-color: @copper-hover;
+}
+
+menuitem:disabled {
+    color: @copper-text-muted;
+}
+
+/* ── Menu bars ────────────────────────────────────────────────── */
+menubar {
+    background-color: @copper-bg;
+    color: @copper-text;
+    border-bottom: 1px solid @copper-border;
+    padding: 2px;
+}
+
+menubar > menuitem {
+    padding: 4px 10px;
+    border-radius: 3px;
+}
+
+menubar > menuitem:hover {
+    background-color: @copper-hover;
+}
+
+/* ── Toolbars ──────────────────────────────────────────────────── */
+toolbar {
+    background-color: @copper-bg;
+    color: @copper-text;
+    border-bottom: 1px solid @copper-border;
+    padding: 4px;
+}
+
+toolbar button {
+    border: none;
+    background: transparent;
+    padding: 4px 8px;
+}
+
+toolbar button:hover {
+    background-color: @copper-hover;
+}
+
+/* ── Notebooks (tabs) ─────────────────────────────────────────── */
+notebook {
+    background-color: @copper-bg;
+}
+
+notebook > header {
+    background-color: @copper-bg;
+    border-bottom: 1px solid @copper-border;
+}
+
+notebook > header > tabs > tab {
+    background-color: transparent;
+    color: @copper-text-muted;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 4px 4px 0 0;
+    padding: 6px 14px;
+    margin: 0 2px;
+}
+
+notebook > header > tabs > tab:checked {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border-color: @copper-border;
+    border-bottom-color: @copper-surface;
+}
+
+notebook > header > tabs > tab:hover {
+    color: @copper-text;
+}
+
+notebook > stack {
+    background-color: @copper-surface;
+    border: 1px solid @copper-border;
+    border-top: none;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────────── */
+scrollbar {
+    background-color: transparent;
+    border: none;
+}
+
+scrollbar slider {
+    background-color: @copper-border;
+    border-radius: 4px;
+    min-width: 8px;
+    min-height: 8px;
+    margin: 2px;
+}
+
+scrollbar slider:hover {
+    background-color: @copper-text-muted;
+}
+
+/* ── Progress bars ────────────────────────────────────────────── */
+progressbar {
+    background-color: @copper-border;
+    border-radius: 4px;
+    min-height: 8px;
+}
+
+progressbar progress {
+    background-color: @copper-accent;
+    border-radius: 4px;
+}
+
+/* ── Level bars ───────────────────────────────────────────────── */
+levelbar block {
+    background-color: @copper-border;
+    border-radius: 2px;
+}
+
+levelbar block.filled {
+    background-color: @copper-accent;
+}
+
+/* ── Switches ─────────────────────────────────────────────────── */
+switch {
+    background-color: @copper-border;
+    border-radius: 12px;
+    min-width: 40px;
+    min-height: 20px;
+}
+
+switch:checked {
+    background-color: @copper-accent;
+}
+
+switch slider {
+    background-color: @copper-surface;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    margin: 2px;
+}
+
+/* ── Checkboxes & radio buttons ───────────────────────────────── */
+checkbutton,
+radiobutton {
+    color: @copper-text;
+    spacing: 6px;
+}
+
+check,
+radio {
+    background-color: @copper-surface;
+    border: 1px solid @copper-border;
+    min-width: 16px;
+    min-height: 16px;
+}
+
+check {
+    border-radius: 3px;
+}
+
+radio {
+    border-radius: 50%;
+}
+
+check:checked,
+radio:checked {
+    background-color: @copper-accent;
+    border-color: @copper-accent;
+}
+
+/* ── Tooltips ─────────────────────────────────────────────────── */
+tooltip {
+    background-color: @copper-bg-dark;
+    color: @copper-fg-dark;
+    border: 1px solid @copper-border-dark;
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+
+/* ── Frames ───────────────────────────────────────────────────── */
+frame {
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+    padding: 8px;
+}
+
+frame > label {
+    color: @copper-text;
+    padding: 0 4px;
+}
+
+/* ── Separators ───────────────────────────────────────────────── */
+separator {
+    background-color: @copper-border;
+    min-width: 1px;
+    min-height: 1px;
+}
+
+/* ── List boxes & tree views ──────────────────────────────────── */
+list,
+treeview {
+    background-color: @copper-surface;
+    color: @copper-text;
+}
+
+list row,
+treeview row {
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+list row:selected,
+treeview row:selected {
+    background-color: @copper-selected;
+    color: #ffffff;
+}
+
+list row:hover,
+treeview row:hover {
+    background-color: @copper-hover;
+}
+
+/* ── Status bars ──────────────────────────────────────────────── */
+statusbar {
+    background-color: @copper-bg;
+    color: @copper-text-muted;
+    border-top: 1px solid @copper-border;
+    padding: 4px 8px;
+}
+
+/* ── Infobars ─────────────────────────────────────────────────── */
+infobar {
+    border-radius: 4px;
+    padding: 6px;
+    margin: 4px;
+}
+
+infobar.info {
+    background-color: @copper-active;
+    color: @copper-text;
+    border: 1px solid @copper-accent;
+}
+
+infobar.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid @copper-warning;
+}
+
+infobar.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid @copper-error;
+}
+
+infobar.question {
+    background-color: @copper-active;
+    color: @copper-text;
+    border: 1px solid @copper-accent;
+}
+
+/* ── Title bars (header bars) ─────────────────────────────────── */
+headerbar {
+    background-color: @copper-bg;
+    color: @copper-text;
+    border-bottom: 1px solid @copper-border;
+    padding: 4px 8px;
+    min-height: 36px;
+}
+
+headerbar button {
+    border: none;
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: 3px;
+}
+
+headerbar button:hover {
+    background-color: @copper-hover;
+}
+
+/* ── Popovers ─────────────────────────────────────────────────── */
+popover {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 6px;
+    padding: 8px;
+}
+
+/* ── Spin buttons ─────────────────────────────────────────────── */
+spinbutton {
+    background-color: @copper-surface;
+    color: @copper-text;
+    border: 1px solid @copper-border;
+    border-radius: 4px;
+}
+
+spinbutton:focus {
+    border-color: @copper-accent;
+}
+
+spinbutton button {
+    border: none;
+    background: transparent;
+    padding: 2px 6px;
+}
+
+/* ── Scales (sliders) ─────────────────────────────────────────── */
+scale {
+    min-height: 20px;
+}
+
+scale slider {
+    background-color: @copper-surface;
+    border: 1px solid @copper-border;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    margin: -4px;
+}
+
+scale slider:hover {
+    border-color: @copper-accent;
+}
+
+scale trough {
+    background-color: @copper-border;
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+scale highlight {
+    background-color: @copper-accent;
+    border-radius: 4px;
+}
+
+/* ── Links ────────────────────────────────────────────────────── */
+link,
+link:visited {
+    color: @copper-accent;
+    text-decoration: underline;
+}
+
+link:hover {
+    color: @copper-accent-dark;
+}
+
+/* ── Labels ───────────────────────────────────────────────────── */
+label {
+    color: @copper-text;
+}
+
+label:disabled {
+    color: @copper-text-muted;
+}
+
+/* ── Dark mode overrides ─────────────────────────────────────── */
+/* Apply by setting the "copper-dark" class on the toplevel window */
+
+window.copper-dark,
+window.copper-dark.background {
+    background-color: @copper-bg-dark;
+    color: @copper-text-dark;
+}
+
+window.copper-dark button {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark button:hover {
+    background-color: @copper-hover-dark;
+    border-color: @copper-accent-dark;
+}
+
+window.copper-dark button:active,
+window.copper-dark button:checked {
+    background-color: @copper-active-dark;
+    border-color: @copper-accent-dark;
+}
+
+window.copper-dark entry {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark entry:focus {
+    border-color: @copper-accent-dark;
+}
+
+window.copper-dark menu,
+window.copper-dark .menu {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark menuitem:hover {
+    background-color: @copper-hover-dark;
+}
+
+window.copper-dark menubar {
+    background-color: @copper-bg-dark;
+    color: @copper-text-dark;
+    border-bottom-color: @copper-border-dark;
+}
+
+window.copper-dark toolbar {
+    background-color: @copper-bg-dark;
+    color: @copper-text-dark;
+    border-bottom-color: @copper-border-dark;
+}
+
+window.copper-dark notebook > header {
+    background-color: @copper-bg-dark;
+    border-bottom-color: @copper-border-dark;
+}
+
+window.copper-dark notebook > header > tabs > tab:checked {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+    border-bottom-color: @copper-surface-dark;
+}
+
+window.copper-dark notebook > stack {
+    background-color: @copper-surface-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark list,
+window.copper-dark treeview {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+}
+
+window.copper-dark list row:selected,
+window.copper-dark treeview row:selected {
+    background-color: @copper-selected-dark;
+}
+
+window.copper-dark list row:hover,
+window.copper-dark treeview row:hover {
+    background-color: @copper-hover-dark;
+}
+
+window.copper-dark headerbar {
+    background-color: @copper-bg-dark;
+    color: @copper-text-dark;
+    border-bottom-color: @copper-border-dark;
+}
+
+window.copper-dark popover {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark frame {
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark separator {
+    background-color: @copper-border-dark;
+}
+
+window.copper-dark statusbar {
+    background-color: @copper-bg-dark;
+    color: @copper-text-muted-dark;
+    border-top-color: @copper-border-dark;
+}
+
+window.copper-dark label {
+    color: @copper-text-dark;
+}
+
+window.copper-dark label:disabled {
+    color: @copper-text-muted-dark;
+}
+
+window.copper-dark check,
+window.copper-dark radio {
+    background-color: @copper-surface-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark check:checked,
+window.copper-dark radio:checked {
+    background-color: @copper-accent-dark;
+    border-color: @copper-accent-dark;
+}
+
+window.copper-dark switch {
+    background-color: @copper-border-dark;
+}
+
+window.copper-dark switch:checked {
+    background-color: @copper-accent-dark;
+}
+
+window.copper-dark switch slider {
+    background-color: @copper-surface-dark;
+}
+
+window.copper-dark scale trough {
+    background-color: @copper-border-dark;
+}
+
+window.copper-dark scale highlight {
+    background-color: @copper-accent-dark;
+}
+
+window.copper-dark scale slider {
+    background-color: @copper-surface-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark scrollbar slider {
+    background-color: @copper-border-dark;
+}
+
+window.copper-dark scrollbar slider:hover {
+    background-color: @copper-text-muted-dark;
+}
+
+window.copper-dark spinbutton {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark combobox {
+    background-color: @copper-surface-dark;
+    color: @copper-text-dark;
+    border-color: @copper-border-dark;
+}
+
+window.copper-dark progressbar {
+    background-color: @copper-border-dark;
+}
+
+window.copper-dark progressbar progress {
+    background-color: @copper-accent-dark;
+}
+
+window.copper-dark link,
+window.copper-dark link:visited {
+    color: @copper-accent-dark;
+}
+
+window.copper-dark infobar.info,
+window.copper-dark infobar.question {
+    background-color: @copper-active-dark;
+    color: @copper-text-dark;
+    border-color: @copper-accent-dark;
+}

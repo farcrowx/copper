@@ -1,0 +1,112 @@
+# Copper Linux — default applications for MIME types
+# handcrafted by 12hrformat
+#
+# Maps MIME types to default applications.
+# Format: mime/type=application-id
+
+# Documents
+application/pdf=org.gnome.Evince.desktop
+application/vnd.oasis.opendocument.text=org.gnome.gedit.desktop
+application/vnd.openxmlformats-officedocument.wordprocessingml.document=org.gnome.gedit.desktop
+application/msword=org.gnome.gedit.desktop
+application/rtf=org.gnome.gedit.desktop
+text/plain=org.gnome.gedit.desktop
+text/markdown=org.gnome.gedit.desktop
+text/html=firefox.desktop
+
+# Spreadsheets
+application/vnd.oasis.opendocument.spreadsheet=org.gnome.gedit.desktop
+application/vnd.openxmlformats-officedocument.spreadsheetml.sheet=org.gnome.gedit.desktop
+application/vnd.ms-excel=org.gnome.gedit.desktop
+text/csv=org.gnome.gedit.desktop
+
+# Presentations
+application/vnd.oasis.opendocument.presentation=org.gnome.gedit.desktop
+application/vnd.openxmlformats-officedocument.presentationml.presentation=org.gnome.gedit.desktop
+application/vnd.ms-powerpoint=org.gnome.gedit.desktop
+
+# Images
+image/png=eog.desktop
+image/jpeg=eog.desktop
+image/gif=eog.desktop
+image/bmp=eog.desktop
+image/tiff=eog.desktop
+image/svg+xml=eog.desktop
+image/webp=eog.desktop
+image/x-icon=eog.desktop
+
+# Audio
+audio/mpeg=vlc.desktop
+audio/ogg=vlc.desktop
+audio/wav=vlc.desktop
+audio/flac=vlc.desktop
+audio/aac=vlc.desktop
+audio/mp4=vlc.desktop
+audio/x-midi=vlc.desktop
+audio/webm=vlc.desktop
+audio/x-matroska=vlc.desktop
+
+# Video
+video/mp4=vlc.desktop
+video/x-matroska=vlc.desktop
+video/webm=vlc.desktop
+video/ogg=vlc.desktop
+video/quicktime=vlc.desktop
+video/x-msvideo=vlc.desktop
+video/x-flv=vlc.desktop
+video/mpeg=vlc.desktop
+video/3gpp=vlc.desktop
+video/x-ms-wmv=vlc.desktop
+
+# Archives
+application/zip=file-roller.desktop
+application/x-tar=file-roller.desktop
+application/x-gzip=file-roller.desktop
+application/x-bzip2=file-roller.desktop
+application/x-xz=file-roller.desktop
+application/x-7z-compressed=file-roller.desktop
+application/x-rar=file-roller.desktop
+application/x-archive=file-roller.desktop
+
+# Web
+text/html=firefox.desktop
+application/xhtml+xml=firefox.desktop
+x-scheme-handler/http=firefox.desktop
+x-scheme-handler/https=firefox.desktop
+
+# System
+application/x-desktop=copper-settings.desktop
+application/x-shellscript=copper-sh.desktop
+application/x-python=copper-sh.desktop
+application/x-perl=copper-sh.desktop
+application/x-c=copper-sh.desktop
+application/x-c++=copper-sh.desktop
+application/x-java=copper-sh.desktop
+application/x-ruby=copper-sh.desktop
+application/x-php=copper-sh.desktop
+application/x-sql=copper-sh.desktop
+application/x-yaml=copper-sh.desktop
+application/x-toml=copper-sh.desktop
+application/x-ini=copper-sh.desktop
+application/json=copper-sh.desktop
+application/xml=copper-sh.desktop
+application/javascript=copper-sh.desktop
+
+# Fonts
+application/x-font-ttf=org.gnome.FontViewer.desktop
+application/x-font-otf=org.gnome.FontViewer.desktop
+application/font-woff=org.gnome.FontViewer.desktop
+application/font-woff2=org.gnome.FontViewer.desktop
+application/x-font-pcf=org.gnome.FontViewer.desktop
+application/x-font-bdf=org.gnome.FontViewer.desktop
+
+# Disk images
+application/x-iso9660-image=gnome-disk-image-mounter.desktop
+application/x-apple-diskimage=gnome-disk-image-mounter.desktop
+
+# E-books
+application/epub+zip=org.gnome.Evince.desktop
+
+# Default fallback
+application/octet-stream=copper-sh.desktop
+inode/directory=pcmanfm.desktop

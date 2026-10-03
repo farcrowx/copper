@@ -1,0 +1,21 @@
+# Copper Linux — default applications list
+# handcrafted by 12hrformat
+#
+# One entry per line. Format: Name|Icon|Command
+# Used by the copper-panel launcher.
+
+Copper Shell|utilities-terminal|copper-sh
+Copper Files|system-file-manager|copper-files
+Copper Settings|preferences-system|copper-settings
+Terminal|utilities-terminal|xterm
+Text Editor|accessories-text-editor|gedit
+Web Browser|web-browser|firefox
+File Manager|system-file-manager|pcmanfm
+Calculator|accessories-calculator|galculator
+Screenshot Tool|applets-screenshooter|gnome-screenshot
+System Monitor|utilities-system-monitor|gnome-system-monitor
+Disk Usage Analyzer|baobab|baobab
+Archive Manager|file-roller|file-roller
+Image Viewer|eog|eog
+Media Player|multimedia-player|vlc
+Music Player|rhythmbox|rhythmbox

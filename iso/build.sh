@@ -143,7 +143,8 @@ require_kernel_config() {
       VT VGA_CONSOLE UNIX98_PTYS \
       EXT4_FS BLK_DEV_SD ATA ATA_PIIX BLK_DEV_NVME \
       VIRTIO_PCI VIRTIO_BLK \
-      NET NETDEVICES INET PACKET UNIX E1000 E1000E VIRTIO_NET ; do
+      NET NETDEVICES INET PACKET UNIX E1000 E1000E VIRTIO_NET \
+      DRM DRM_VIRTIO_GPU DRM_SIMPLEDRM FB FB_VESA ; do
     grep -qx "CONFIG_$sym=y" "$cfg" || missing="$missing $sym"
   done
   if [ -n "$missing" ]; then
@@ -174,7 +175,9 @@ build_kernel() {
       --enable VMXNET3 --enable VMWARE_VMXNET3 \
       --enable ATA --enable ATA_PIIX --enable BLK_DEV_SD --enable BLK_DEV_NVME \
       --enable EXT4_FS --enable PACKET --enable UNIX --enable VT \
-      --enable VGA_CONSOLE --enable INPUT
+      --enable VGA_CONSOLE --enable INPUT \
+      --enable DRM --enable DRM_VIRTIO_GPU --enable DRM_SIMPLEDRM \
+      --enable FB --enable FB_VESA
     # vmxnet3 was renamed at some point around 6.12; asking for both names
     # costs nothing, since kconfig drops whichever one doesn't exist.
     make olddefconfig
@@ -488,6 +491,141 @@ build_iso() {
 }
 
 # ---------------------------------------------------------------
+# 9. X11 libraries and utilities
+# ---------------------------------------------------------------
+build_x11() {
+  if [ -x "$TGT/usr/bin/xterm" ] && [ -x "$TGT/usr/bin/xrandr" ] \
+     && stamped_skip "$WORK/x11.stamp" "$SELF"; then
+    echo "x11: already built, skipping"; return
+  fi
+  echo "==> X11"
+  build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
+  build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
+  build_gnu libXrender    "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz"
+  build_gnu libXft        "https://www.x.org/releases/individual/lib/libXft-2.3.8.tar.xz"
+  build_gnu libXcursor    "https://www.x.org/releases/individual/lib/libXcursor-1.2.2.tar.xz"
+  build_gnu libXfixes     "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz"
+  build_gnu libXrandr     "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz"
+  build_gnu libXi         "https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz"
+  build_gnu libXdamage    "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz"
+  build_gnu libXcomposite "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz"
+  build_gnu libXinerama   "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz"
+  build_gnu libXScrnSaver "https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.3.tar.xz"
+  build_gnu libXtst       "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz"
+  build_gnu libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
+  build_gnu libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
+  build_gnu libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
+  build_gnu libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
+  build_gnu libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz"
+  build_gnu libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz"
+  build_gnu libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz"
+  build_gnu libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz"
+  build_gnu xorg-server   "https://www.x.org/releases/individual/xserver/xorg-server-21.1.14.tar.xz"
+  build_gnu xterm         "https://invisible-island.net/archives/xterm/xterm-393.tgz"
+  build_gnu xset          "https://www.x.org/releases/individual/app/xset-1.2.5.tar.xz"
+  build_gnu xrandr        "https://www.x.org/releases/individual/app/xrandr-1.5.3.tar.xz"
+  stamp_set "$WORK/x11.stamp" "$SELF"
+}
+
+# ---------------------------------------------------------------
+# 10. GTK3 and GUI dependencies
+# ---------------------------------------------------------------
+build_gtk() {
+  if [ -x "$TGT/usr/bin/gtk3-demo" ] && [ -x "$TGT/usr/bin/dbus-daemon" ] \
+     && stamped_skip "$WORK/gtk.stamp" "$SELF"; then
+    echo "gtk: already built, skipping"; return
+  fi
+  echo "==> GTK3"
+  build_gnu glib         "https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz" \
+    --disable-modular-tests --with-pcre=internal
+  build_gnu cairo        "https://www.cairographics.org/releases/cairo-1.18.2.tar.xz"
+  build_gnu pango        "https://download.gnome.org/sources/pango/1.54/pango-1.54.0.tar.xz"
+  build_gnu atk          "https://download.gnome.org/sources/atk/2.38/atk-2.38.0.tar.xz"
+  build_gnu gdk-pixbuf   "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-2.42.12.tar.xz"
+  build_gnu gtk+3        "https://download.gnome.org/sources/gtk/3.24/gtk-3.24.43.tar.xz"
+  build_gnu dbus         "https://dbus.freedesktop.org/releases/dbus-1.14.10.tar.xz"
+  build_gnu libnotify     "https://download.gnome.org/sources/libnotify/0.8/libnotify-0.8.3.tar.xz"
+  build_gnu upower       "https://upower.freedesktop.org/releases/upower-1.90.4.tar.xz"
+  build_gnu networkmanager "https://download.gnome.org/sources/NetworkManager/1.46/NetworkManager-1.46.0.tar.xz"
+  build_gnu pulseaudio   "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-17.0.tar.xz"
+  stamp_set "$WORK/gtk.stamp" "$SELF"
+}
+
+# ---------------------------------------------------------------
+# 11. Copper GUI components
+# ---------------------------------------------------------------
+build_gui() {
+  local SRC="$ROOT/../gui"
+  if [ -x "$TGT/usr/bin/copper-wm" ] && [ -x "$TGT/usr/bin/copper-panel" ] \
+     && stamped_skip "$WORK/gui.stamp" "$SELF" \
+        "$SRC"/copper-wm/copper-wm.c "$SRC"/copper-panel/copper-panel.c \
+        "$SRC"/copper-launcher/copper-launcher.c "$SRC"/copper-files/copper-files.c \
+        "$SRC"/copper-settings/copper-settings.c "$SRC"/copper-notifyd/copper-notifyd.c \
+        "$SRC"/copper-network/copper-network.c "$SRC"/copper-power/copper-power.c; then
+    echo "gui: already built, skipping"; return
+  fi
+  echo "==> Copper GUI"
+  local f
+  # Window manager (Xlib, no GTK)
+  $CC $CFLAGS -std=c11 -o "$TGT/usr/bin/copper-wm" \
+     "$SRC/copper-wm/copper-wm.c" -lX11
+  # GTK3 applications
+  local GTK_CFLAGS="-I$TGT/usr/include -I$TGT/usr/include/gtk-3.0 -I$TGT/usr/include/glib-2.0 -I$TGT/usr/lib/glib-2.0/include -I$TGT/usr/include/pango-1.0 -I$TGT/usr/include/cairo -I$TGT/usr/include/gdk-pixbuf-2.0 -I$TGT/usr/include/atk-1.0 -I$TGT/usr/include/harfbuzz -I$TGT/usr/include/freetype2 -I$TGT/usr/include/libpng16 -I$TGT/usr/include/pixman-1 -I$TGT/usr/include/gio-unix-2.0"
+  local GTK_LIBS="-L$TGT/usr/lib -lgtk-3 -lgdk-3 -lglib-2.0 -lgobject-2.0 -lgio-2.0 -lpango-1.0 -lcairo -lgdk_pixbuf-2.0 -latk-1.0 -lharfbuzz -lfreetype -lpng16 -lpixman-1 -lpangocairo-1.0 -lpangoft2-1.0 -lfontconfig -lexpat -lfribidi -lz -lm -lpthread -ldl"
+  for f in copper-panel copper-launcher copper-files \
+           copper-settings copper-notifyd copper-network copper-power; do
+    $CC $CFLAGS -std=c11 $GTK_CFLAGS -o "$TGT/usr/bin/$f" \
+       "$SRC/$f/$f.c" $GTK_LIBS
+  done
+  # Session script
+  cat > "$TGT/usr/bin/copper-session" <<'SESSION'
+#!/bin/busybox sh
+# Copper Linux — X session script
+export DISPLAY=:0
+export XAUTHORITY="$HOME/.Xauthority"
+export XDG_SESSION_TYPE=x11
+export XDG_SESSION_DESKTOP=copper
+export XDG_CURRENT_DESKTOP=Copper
+export XDG_CONFIG_DIRS=/etc/copper
+export XDG_DATA_DIRS=/usr/share
+export GTK_THEME=Copper
+
+# Start session bus
+eval $(dbus-launch --sh-syntax --exit-with-session)
+
+# Start Xorg
+Xorg :0 -noreset -logfile /var/log/Xorg.0.log &
+XORG_PID=$!
+
+# Wait for X to be ready
+sleep 2
+
+# Start window manager
+copper-wm &
+WM_PID=$!
+
+# Start panel
+copper-panel &
+PANEL_PID=$!
+
+# Wait for WM to exit
+wait $WM_PID
+
+# Clean up
+kill $PANEL_PID 2>/dev/null
+kill $XORG_PID 2>/dev/null
+wait $PANEL_PID 2>/dev/null
+wait $XORG_PID 2>/dev/null
+SESSION
+  chmod 0755 "$TGT/usr/bin/copper-session"
+  stamp_set "$WORK/gui.stamp" "$SELF" \
+    "$SRC"/copper-wm/copper-wm.c "$SRC"/copper-panel/copper-panel.c \
+    "$SRC"/copper-launcher/copper-launcher.c "$SRC"/copper-files/copper-files.c \
+    "$SRC"/copper-settings/copper-settings.c "$SRC"/copper-notifyd/copper-notifyd.c \
+    "$SRC"/copper-network/copper-network.c "$SRC"/copper-power/copper-power.c
+}
+
+# ---------------------------------------------------------------
 # stage dispatch
 # ---------------------------------------------------------------
 full() {
@@ -496,6 +634,9 @@ full() {
   build_busybox
   build_tools
   build_copper
+  build_x11
+  build_gtk
+  build_gui
   build_rootfs
   build_initramfs
   build_iso
@@ -506,11 +647,14 @@ case "$STAGE" in
   base)       build_musl; build_busybox ;;
   tools)      build_musl; build_tools ;;
   copper)     build_musl; build_copper ;;
+  x11)        build_musl; build_x11 ;;
+  gtk)        build_musl; build_gtk ;;
+  gui)        build_musl; build_gui ;;
   rootfs)     build_rootfs ;;
   initramfs)  build_musl; build_busybox; build_rootfs; build_initramfs ;;
   iso)        build_musl; build_busybox; build_rootfs; build_initramfs; build_iso ;;
   all|"")     full ;;
-  *)          echo "unknown stage: $STAGE (kernel|base|tools|copper|rootfs|initramfs|iso|all)"; exit 2 ;;
+  *)          echo "unknown stage: $STAGE (kernel|base|tools|copper|x11|gtk|gui|rootfs|initramfs|iso|all)"; exit 2 ;;
 esac
 
 echo "==> done"

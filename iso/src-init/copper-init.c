@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <pwd.h>
 
 #ifndef TIOCSCTTY
 #define TIOCSCTTY 0x540E   /* stable Linux value, in case musl is shy */
@@ -238,6 +239,123 @@ static pid_t spawn_tty(int tty) {
     _exit(1);
 }
 
+/* Spawn an X session on :0. Returns the child's pid, or -1 on fork
+   failure. The child sets up the user environment, starts dbus, Xorg,
+   copper-wm, and copper-panel. If X fails to start the child exits
+   non-zero and the parent falls back to copper-sh on tty1. */
+static pid_t spawn_xsession(void) {
+    pid_t pid = fork();
+    if (pid != 0) return pid;
+
+    /* Child: become session leader and set up the X session */
+    setsid();
+
+    /* Find the first regular user (UID >= 1000) from /etc/passwd */
+    char username[64] = "copper";
+    char homedir[256] = "/home/copper";
+    uid_t user_uid = 1000;
+    struct passwd *pw = getpwuid(1000);
+    if (pw && pw->pw_name && pw->pw_uid >= 1000) {
+        snprintf(username, sizeof(username), "%s", pw->pw_name);
+        snprintf(homedir, sizeof(homedir), "%s", pw->pw_dir);
+        user_uid = pw->pw_uid;
+    }
+
+    /* Environment for the logged-in user */
+    setenv("HOME", homedir, 1);
+    setenv("USER", username, 1);
+    setenv("LOGNAME", username, 1);
+    setenv("DISPLAY", ":0", 1);
+    char xauth[300];
+    snprintf(xauth, sizeof(xauth), "%s/.Xauthority", homedir);
+    setenv("XAUTHORITY", xauth, 1);
+    setenv("XDG_SESSION_TYPE", "x11", 1);
+    setenv("XDG_SESSION_DESKTOP", "copper", 1);
+    setenv("XDG_CURRENT_DESKTOP", "Copper", 1);
+    setenv("XDG_CONFIG_DIRS", "/etc/copper", 1);
+    setenv("XDG_DATA_DIRS", "/usr/share", 1);
+    char runtime_dir[300];
+    snprintf(runtime_dir, sizeof(runtime_dir), "/run/user/%d", (int)user_uid);
+    setenv("XDG_RUNTIME_DIR", runtime_dir, 1);
+    setenv("GTK_THEME", "Copper", 1);
+
+    /* Switch to the user's UID/GID */
+    setgid(user_uid);
+    setuid(user_uid);
+
+    /* Start a session bus and capture its address */
+    int dbus_pipe[2];
+    if (pipe(dbus_pipe) != 0)
+        _exit(1);
+    pid_t dbus_pid = fork();
+    if (dbus_pid == 0) {
+        close(dbus_pipe[0]);
+        dup2(dbus_pipe[1], 1);
+        close(dbus_pipe[1]);
+        execl("/usr/bin/dbus-daemon", "dbus-daemon", "--session",
+              "--fork", "--print-address", (char *)NULL);
+        _exit(127);
+    }
+    close(dbus_pipe[1]);
+
+    char dbus_addr[256] = {0};
+    ssize_t n = read(dbus_pipe[0], dbus_addr, sizeof(dbus_addr) - 1);
+    close(dbus_pipe[0]);
+    waitpid(dbus_pid, NULL, 0);
+    if (n > 0) {
+        dbus_addr[strcspn(dbus_addr, "\n")] = '\0';
+        if (dbus_addr[0])
+            setenv("DBUS_SESSION_BUS_ADDRESS", dbus_addr, 1);
+    }
+
+    /* Start Xorg on :0 */
+    pid_t x_pid = fork();
+    if (x_pid == 0) {
+        execl("/usr/bin/Xorg", "Xorg", ":0", "-noreset",
+              "-logfile", "/var/log/Xorg.0.log", (char *)NULL);
+        _exit(127);
+    }
+
+    /* Give X a moment to start */
+    usleep(2000 * 1000);
+
+    /* Check that X is still running */
+    if (kill(x_pid, 0) != 0) {
+        say("Xorg failed to start, falling back to shell");
+        kill(dbus_pid, SIGTERM);
+        waitpid(dbus_pid, NULL, 0);
+        _exit(1);
+    }
+
+    /* Start the window manager */
+    pid_t wm_pid = fork();
+    if (wm_pid == 0) {
+        execl("/usr/bin/copper-wm", "copper-wm", (char *)NULL);
+        _exit(127);
+    }
+
+    /* Start the panel */
+    pid_t panel_pid = fork();
+    if (panel_pid == 0) {
+        execl("/usr/bin/copper-panel", "copper-panel", (char *)NULL);
+        _exit(127);
+    }
+
+    /* Wait for the window manager to exit */
+    int status;
+    waitpid(wm_pid, &status, 0);
+
+    /* Clean up: kill panel, X, and dbus */
+    kill(panel_pid, SIGTERM);
+    waitpid(panel_pid, NULL, 0);
+    kill(x_pid, SIGTERM);
+    waitpid(x_pid, NULL, 0);
+    kill(dbus_pid, SIGTERM);
+    waitpid(dbus_pid, NULL, 0);
+
+    _exit(0);
+}
+
 int main(void) {
     console_stdio();
 
@@ -289,6 +407,19 @@ int main(void) {
         }
         int wst;
         waitpid(wiz, &wst, 0);
+    }
+
+    /* Try to spawn an X session first. If it fails, fall back to copper-sh
+       on tty1. The X session runs as the logged-in user and manages its own
+       lifecycle (dbus, Xorg, copper-wm, copper-panel). */
+    pid_t xpid = spawn_xsession();
+    if (xpid > 0) {
+        int xst;
+        waitpid(xpid, &xst, 0);
+        if (WIFEXITED(xst) && WEXITSTATUS(xst) == 0)
+            say("X session ended cleanly");
+        else
+            say("X session failed, falling back to shell");
     }
 
     /* Exactly one shell at a time. Keep the pid so the reaper below can wait on
