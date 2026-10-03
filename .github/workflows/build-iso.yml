@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: iso/work
-          key: copper-work-${{ hashFiles('iso/build.sh','iso/live/init','iso/boot/grub.cfg','iso/rootfs-overlay/**','iso/src-init/**','iso/firstboot/**','src/**') }}
+          key: copper-work-${{ hashFiles('iso/build.sh','iso/live/init','iso/boot/grub.cfg','iso/rootfs-overlay/**','iso/src-init/**','iso/firstboot/**','src/**','gui/**','.github/workflows/build-iso.yml') }}
           restore-keys: |
             copper-work-
 
@@ -65,6 +65,15 @@ jobs:
 
       - name: Build Copper's own binaries
         run: sudo bash iso/build.sh copper
+
+      - name: Build X11 libraries and utilities
+        run: sudo bash iso/build.sh x11
+
+      - name: Build GTK3 and GUI dependencies
+        run: sudo bash iso/build.sh gtk
+
+      - name: Build Copper GUI components
+        run: sudo bash iso/build.sh gui
 
       - name: Rootfs config + timezone
         run: sudo bash iso/build.sh rootfs
@@ -89,4 +98,4 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: iso/work
-          key: copper-work-${{ hashFiles('iso/build.sh','iso/live/init','iso/boot/grub.cfg','iso/rootfs-overlay/**','iso/src-init/**','iso/firstboot/**','src/**') }}
+          key: copper-work-${{ hashFiles('iso/build.sh','iso/live/init','iso/boot/grub.cfg','iso/rootfs-overlay/**','iso/src-init/**','iso/firstboot/**','src/**','gui/**','.github/workflows/build-iso.yml') }}
