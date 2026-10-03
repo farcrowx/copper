@@ -499,31 +499,58 @@ build_x11() {
     echo "x11: already built, skipping"; return
   fi
   echo "==> X11"
-  build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
-  build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
-  build_gnu libXrender    "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz"
-  build_gnu libXft        "https://www.x.org/releases/individual/lib/libXft-2.3.8.tar.xz"
-  build_gnu libXcursor    "https://www.x.org/releases/individual/lib/libXcursor-1.2.2.tar.xz"
-  build_gnu libXfixes     "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz"
-  build_gnu libXrandr     "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz"
-  build_gnu libXi         "https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz"
-  build_gnu libXdamage    "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz"
-  build_gnu libXcomposite "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz"
-  build_gnu libXinerama   "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz"
-  build_gnu libXScrnSaver "https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.3.tar.xz"
-  build_gnu libXtst       "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz"
-  build_gnu libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
-  build_gnu libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
-  build_gnu libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
-  build_gnu libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
-  build_gnu libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz"
-  build_gnu libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz"
-  build_gnu libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz"
-  build_gnu libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz"
-  build_gnu xorg-server   "https://www.x.org/releases/individual/xserver/xorg-server-21.1.14.tar.xz"
-  build_gnu xterm         "https://invisible-island.net/archives/xterm/xterm-393.tgz"
-  build_gnu xset          "https://www.x.org/releases/individual/app/xset-1.2.5.tar.xz"
-  build_gnu xrandr        "https://www.x.org/releases/individual/app/xrandr-1.5.3.tar.xz"
+  # X11 configure scripts need explicit --x-includes/--x-libraries
+  # because they don't understand --prefix=/usr the way GNU tools do
+  build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXrender    "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXft        "https://www.x.org/releases/individual/lib/libXft-2.3.8.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXcursor    "https://www.x.org/releases/individual/lib/libXcursor-1.2.2.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXfixes     "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXrandr     "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXi         "https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXdamage    "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXcomposite "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXinerama   "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXScrnSaver "https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.3.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXtst       "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu xorg-server   "https://www.x.org/releases/individual/xserver/xorg-server-21.1.14.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu xterm         "https://invisible-island.net/archives/xterm/xterm-393.tgz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu xset          "https://www.x.org/releases/individual/app/xset-1.2.5.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
+  build_gnu xrandr        "https://www.x.org/releases/individual/app/xrandr-1.5.3.tar.xz" \
+    --x-includes=/usr/include --x-libraries=/usr/lib
   stamp_set "$WORK/x11.stamp" "$SELF"
 }
 
