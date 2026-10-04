@@ -524,7 +524,45 @@ build_iso() {
 }
 
 # ---------------------------------------------------------------
-# 9. X11 libraries and utilities
+# 9a. Foundation libraries shared by the X11 and GTK stages
+# ---------------------------------------------------------------
+# These sit underneath both, so they get their own stage and their own
+# stamp. Splitting them out is not tidiness: libXft needs freetype and
+# fontconfig, and cairo needs pixman and freetype, so any ordering that
+# puts the X11 stage entirely before the GTK stage leaves libXft
+# configuring without a font backend and cairo without its rasteriser.
+# Two stages with a shared prerequisite is the only shape where that
+# cannot happen.
+build_gui_deps() {
+  if [ -f "$TGT/usr/lib/pkgconfig/fontconfig.pc" ] \
+     && [ -f "$TGT/usr/lib/pkgconfig/freetype2.pc" ] \
+     && stamped_skip "$WORK/guideps.stamp" "$SELF"; then
+    echo "gui-deps: already built, skipping"; return
+  fi
+  echo "==> foundation libraries for the desktop"
+  export PKG_CONFIG_PATH="$TGT/usr/lib/pkgconfig:$TGT/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+  export PKG_CONFIG_SYSROOT_DIR=""
+
+  build_gnu_staged zlib      "https://zlib.net/zlib-1.3.1.tar.gz"
+  build_gnu_staged libbzip2  "https://sourceware.org/pub/libbzip2/bzip2-1.0.8.tar.gz"
+  build_gnu_staged expat     "https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.xz"
+  build_gnu_staged libffi    "https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz"
+  build_gnu_staged libpng    "https://download.sourceforge.net/libpng/libpng-1.6.43.tar.xz"
+  build_gnu_staged brotli    "https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
+  build_gnu_staged freetype  "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.xz" \
+    --disable-gtk-doc --without-brotli --without-zlib
+  build_gnu_staged fontconfig "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.14.2.tar.xz" \
+    --disable-docs
+  build_gnu_staged pixman    "https://www.cairographics.org/releases/pixman-0.42.2.tar.gz" \
+    --disable-gtk
+  build_gnu_staged harfbuzz  "https://github.com/harfbuzz/harfbuzz/releases/download/8.5.0/harfbuzz-8.5.0.tar.xz" \
+    --disable-static --without-icu --without-glib --without-freetype --without-gobject
+  build_gnu_staged fribidi    "https://github.com/fribidi/fribidi/releases/download/v1.0.13/fribidi-1.0.13.tar.xz"
+  stamp_set "$WORK/guideps.stamp" "$SELF"
+}
+
+# ---------------------------------------------------------------
+# 9b. X11 libraries and utilities
 # ---------------------------------------------------------------
 build_x11() {
   if [ -x "$TGT/usr/bin/xterm" ] && [ -x "$TGT/usr/bin/xrandr" ] \
@@ -532,16 +570,27 @@ build_x11() {
     echo "x11: already built, skipping"; return
   fi
   echo "==> X11"
+  build_gui_deps
   # X11 configure looks for a literal /X11 directory. Create a symlink.
   [ -e /X11 ] || ln -s /usr /X11
-  # pkg-config has to find what each stage just installed, or glib/gtk come
-  # out with no cairo or no pango and the failure surfaces 20 minutes later
-  # as a wall of unrelated link errors.
+  # pkg-config has to find what each package just installed, or libX11
+  # configures without xtrans and gtk without cairo — silently, with the
+  # real failure surfacing much later as a wall of unrelated link errors.
   export PKG_CONFIG_PATH="$TGT/usr/lib/pkgconfig:$TGT/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
   export PKG_CONFIG_SYSROOT_DIR=""
-  # xorgproto provides keysymdef.h and the rest of the protocol headers, and
-  # libX11 will not configure without it.
+
+  # Order is the dependency graph, not alphabetical. xorgproto supplies
+  # keysymdef.h and the protocol headers; xtrans supplies the XCTrans
+  # socket macros; xcb-proto and libxcb are hard requirements of libX11's
+  # PKG_CHECK_MODULES (xproto xextproto xtrans xcb kbproto inputproto).
+  # libXau and libXdmcp come before libxcb because it links both, and both
+  # come before libX11 for the same reason.
   build_gnu_staged xorgproto  "https://www.x.org/releases/individual/proto/xorgproto-2024.1.tar.xz"
+  build_gnu_staged libxtrans  "https://www.x.org/releases/individual/lib/libxtrans-1.5.0.tar.xz"
+  build_gnu_staged xcb-proto  "https://www.x.org/releases/individual/proto/xcb-proto-1.17.0.tar.xz"
+  build_gnu_staged libXau     "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz"
+  build_gnu_staged libXdmcp   "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
+  build_gnu_staged libxcb     "https://www.x.org/releases/individual/lib/libxcb-1.17.0.tar.xz"
   build_gnu_staged libX11     "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
   build_gnu_staged libXext    "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
   build_gnu_staged libXrender "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz"
@@ -558,8 +607,6 @@ build_x11() {
   build_gnu_staged libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
   build_gnu_staged libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
   build_gnu_staged libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
-  build_gnu_staged libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
-  build_gnu_staged libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz"
   build_gnu_staged libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz"
   build_gnu_staged libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz"
   build_gnu_staged libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz"
@@ -587,27 +634,20 @@ build_gtk() {
   # the staging tree has to be the prefix. PKG_CONFIG_PATH is what lets
   # pango find cairo and gtk find both; without it every one of them
   # silently configures with its optional dependencies switched off.
+  #
+  # The foundation libraries were already built by the X11 stage, which
+  # needs several of them too. build_gui_deps is stamped, so this is a
+  # hash check rather than a rebuild — but calling it is what makes the
+  # GTK stage correct when run on its own.
+  build_gui_deps
   export PKG_CONFIG_PATH="$TGT/usr/lib/pkgconfig:$TGT/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
   export PKG_CONFIG_SYSROOT_DIR=""
   export CFLAGS="-I$TGT/usr/include $CFLAGS"
   export LDFLAGS="-L$TGT/usr/lib $LDFLAGS"
 
   build_gnu_staged glib      "https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz" \
-    --disable-modular-tests --with-pcre=internal --disable-dtrace
-  build_gnu_staged libffi    "https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz"
-  build_gnu_staged pixman    "https://www.cairographics.org/releases/pixman-0.42.2.tar.gz"
-  build_gnu_staged libpng    "https://download.sourceforge.net/libpng/libpng-1.6.43.tar.xz"
-  build_gnu_staged freetype  "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.xz" \
-    --disable-gtk-doc
-  build_gnu_staged fontconfig "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.14.2.tar.xz"
-  build_gnu_staged expat     "https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.xz"
-  build_gnu_staged zlib      "https://zlib.net/zlib-1.3.1.tar.gz"
-  build_gnu_staged libbzip2  "https://sourceware.org/pub/libbzip2/bzip2-1.0.8.tar.gz"
-  build_gnu_staged brotli    "https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz" \
-    --disable-static
-  build_gnu_staged harfbuzz  "https://github.com/harfbuzz/harfbuzz/releases/download/8.5.0/harfbuzz-8.5.0.tar.xz" \
-    --disable-static --without-icu --without-glib --without-freetype
-  build_gnu_staged fribidi    "https://github.com/fribidi/fribidi/releases/download/v1.0.13/fribidi-1.0.13.tar.xz"
+    --disable-modular-tests --with-pcre=internal --disable-dtrace \
+    --disable-selinux --disable-libmount --disable-man --disable-doc
   build_gnu_staged cairo     "https://www.cairographics.org/releases/cairo-1.18.0.tar.xz" \
     --disable-static --enable-xlib --enable-ft --enable-fc
   build_gnu_staged pango     "https://download.gnome.org/sources/pango/1.54/pango-1.54.0.tar.xz" \
