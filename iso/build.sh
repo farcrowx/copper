@@ -118,8 +118,15 @@ fetch() {                   # fetch url -> prints tarball path (stdout only)
 
 unpack() {                  # unpack tarball -> prints its dir
   local f="$1"
-  local d="${f%.tar.*}"
+  # Strip the archive suffix. The GUI dependency set brought three shapes
+  # in with it — .tar.xz, .tar.gz and .tgz — and stripping only ".tar.*"
+  # leaves "xterm-393.tgz" as the directory name, so the build walks into a
+  # path that does not exist and fails with something that reads like a
+  # missing tarball rather than a naming bug here.
+  local d="${f%.tar.xz}"; d="${d%.tar.gz}"; d="${d%.tar.bz2}"
+  d="${d%.tgz}"; d="${d%.tbz2}"; d="${d%.tar}"
   [ -d "$d" ] || tar -xf "$f" -C "$DL"
+  [ -d "$d" ] || { echo "unpack: $f did not produce $d" >&2; exit 1; }
   echo "$d"
 }
 
@@ -321,6 +328,32 @@ build_gnu() {   # build_gnu NAME URL [configure args...]
   popd >/dev/null
 }
 
+# Same, but --prefix IS the staging directory and there is no DESTDIR.
+#
+# The X11 and GTK configure scripts compute their include and library paths
+# from --prefix at configure time and then test for headers at that absolute
+# path — libX11 does `[ -f $includedir/X11/keysymdef.h ]` and errors out
+# with "Cannot find keysymdef.h" when it is missing. CFLAGS cannot help: the
+# check never runs the compiler. With the usual --prefix=/usr plus a DESTDIR
+# staging tree the two sides disagree by construction — the header is
+# installed to $TGT/usr/include while configure insists on /usr/include — and
+# the build dies on a file that is demonstrably there.
+#
+# Pointing --prefix at $TGT/usr makes both sides agree without touching the
+# build host, which matters because the build runs as root on the runner.
+build_gnu_staged() {   # build_gnu_staged NAME URL [configure args...]
+  local name="$1" url="$2"; shift 2
+  echo "  -> $name"
+  local t d
+  t=$(fetch "$url"); d=$(unpack "$t")
+  pushd "$d" >/dev/null
+    ./configure --host=x86_64-linux-musl --prefix="$TGT/usr" \
+      --disable-shared --enable-static --disable-nls "$@"
+    make -j"$JOBS"
+    make install
+  popd >/dev/null
+}
+
 build_tools() {
   if [ -x "$TGT/usr/bin/ls" ] && [ -x "$TGT/usr/bin/grep" ] \
      && stamped_skip "$WORK/tools.stamp" "$SELF"; then
@@ -501,62 +534,42 @@ build_x11() {
   echo "==> X11"
   # X11 configure looks for a literal /X11 directory. Create a symlink.
   [ -e /X11 ] || ln -s /usr /X11
-  # xorgproto provides keysymdef.h and other protocol headers.
-  # It installs to $TGT/usr/include, so add that to the include path
-  # so subsequent X11 builds can find the headers.
-  export CFLAGS="$CFLAGS -I$TGT/usr/include"
-  export LDFLAGS="$LDFLAGS -L$TGT/usr/lib"
-  build_gnu xorgproto    "https://www.x.org/releases/individual/proto/xorgproto-2024.1.tar.xz"
-  build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXrender    "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXft        "https://www.x.org/releases/individual/lib/libXft-2.3.8.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXcursor    "https://www.x.org/releases/individual/lib/libXcursor-1.2.2.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXfixes     "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXrandr     "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXi         "https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXdamage    "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXcomposite "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXinerama   "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXScrnSaver "https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.3.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXtst       "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu xorg-server   "https://www.x.org/releases/individual/xserver/xorg-server-21.1.14.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu xterm         "https://invisible-island.net/archives/xterm/xterm-393.tgz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu xset          "https://www.x.org/releases/individual/app/xset-1.2.5.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
-  build_gnu xrandr        "https://www.x.org/releases/individual/app/xrandr-1.5.3.tar.xz" \
-    --x-includes=/usr/include --x-libraries=/usr/lib
+  # pkg-config has to find what each stage just installed, or glib/gtk come
+  # out with no cairo or no pango and the failure surfaces 20 minutes later
+  # as a wall of unrelated link errors.
+  export PKG_CONFIG_PATH="$TGT/usr/lib/pkgconfig:$TGT/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+  export PKG_CONFIG_SYSROOT_DIR=""
+  # xorgproto provides keysymdef.h and the rest of the protocol headers, and
+  # libX11 will not configure without it.
+  build_gnu_staged xorgproto  "https://www.x.org/releases/individual/proto/xorgproto-2024.1.tar.xz"
+  build_gnu_staged libX11     "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz"
+  build_gnu_staged libXext    "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz"
+  build_gnu_staged libXrender "https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz"
+  build_gnu_staged libXft     "https://www.x.org/releases/individual/lib/libXft-2.3.8.tar.xz"
+  build_gnu_staged libXcursor "https://www.x.org/releases/individual/lib/libXcursor-1.2.2.tar.xz"
+  build_gnu_staged libXfixes  "https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz"
+  build_gnu_staged libXrandr  "https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz"
+  build_gnu_staged libXi      "https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz"
+  build_gnu_staged libXdamage "https://www.x.org/releases/individual/lib/libXdamage-1.1.6.tar.xz"
+  build_gnu_staged libXcomposite "https://www.x.org/releases/individual/lib/libXcomposite-0.4.6.tar.xz"
+  build_gnu_staged libXinerama   "https://www.x.org/releases/individual/lib/libXinerama-1.1.5.tar.xz"
+  build_gnu_staged libXScrnSaver "https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.3.tar.xz"
+  build_gnu_staged libXtst       "https://www.x.org/releases/individual/lib/libXtst-1.2.5.tar.xz"
+  build_gnu_staged libXpm        "https://www.x.org/releases/individual/lib/libXpm-3.5.17.tar.xz"
+  build_gnu_staged libXmu        "https://www.x.org/releases/individual/lib/libXmu-1.2.1.tar.xz"
+  build_gnu_staged libXaw        "https://www.x.org/releases/individual/lib/libXaw-1.0.16.tar.xz"
+  build_gnu_staged libXdmcp      "https://www.x.org/releases/individual/lib/libXdmcp-1.1.5.tar.xz"
+  build_gnu_staged libXau        "https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz"
+  build_gnu_staged libXfont2     "https://www.x.org/releases/individual/lib/libXfont2-2.0.6.tar.xz"
+  build_gnu_staged libxkbcommon  "https://xkbcommon.org/download/libxkbcommon-1.7.0.tar.xz"
+  build_gnu_staged libxshmfence  "https://www.x.org/releases/individual/lib/libxshmfence-1.3.2.tar.xz"
+  build_gnu_staged xorg-server   "https://www.x.org/releases/individual/xserver/xorg-server-21.1.14.tar.xz" \
+    --enable-xorg --disable-xwayland --disable-xvfb --disable-xnest \
+    --disable-udev --disable-dmx --disable-xv --disable-record \
+    --disable-glx --disable-dri --disable-glamor
+  build_gnu_staged xterm         "https://invisible-island.net/archives/xterm/xterm-393.tgz"
+  build_gnu_staged xset          "https://www.x.org/releases/individual/app/xset-1.2.5.tar.xz"
+  build_gnu_staged xrandr        "https://www.x.org/releases/individual/app/xrandr-1.5.3.tar.xz"
   stamp_set "$WORK/x11.stamp" "$SELF"
 }
 
@@ -564,23 +577,52 @@ build_x11() {
 # 10. GTK3 and GUI dependencies
 # ---------------------------------------------------------------
 build_gtk() {
-  if [ -x "$TGT/usr/bin/gtk3-demo" ] && [ -x "$TGT/usr/bin/dbus-daemon" ] \
+  if [ -x "$TGT/usr/bin/dbus-daemon" ] && [ -f "$TGT/usr/lib/pkgconfig/gtk+-3.0.pc" ] \
      && stamped_skip "$WORK/gtk.stamp" "$SELF"; then
     echo "gtk: already built, skipping"; return
   fi
   echo "==> GTK3"
-  build_gnu glib         "https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz" \
-    --disable-modular-tests --with-pcre=internal
-  build_gnu cairo        "https://www.cairographics.org/releases/cairo-1.18.2.tar.xz"
-  build_gnu pango        "https://download.gnome.org/sources/pango/1.54/pango-1.54.0.tar.xz"
-  build_gnu atk          "https://download.gnome.org/sources/atk/2.38/atk-2.38.0.tar.xz"
-  build_gnu gdk-pixbuf   "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-2.42.12.tar.xz"
-  build_gnu gtk+3        "https://download.gnome.org/sources/gtk/3.24/gtk-3.24.43.tar.xz"
-  build_gnu dbus         "https://dbus.freedesktop.org/releases/dbus-1.14.10.tar.xz"
-  build_gnu libnotify     "https://download.gnome.org/sources/libnotify/0.8/libnotify-0.8.3.tar.xz"
-  build_gnu upower       "https://upower.freedesktop.org/releases/upower-1.90.4.tar.xz"
-  build_gnu networkmanager "https://download.gnome.org/sources/NetworkManager/1.46/NetworkManager-1.46.0.tar.xz"
-  build_gnu pulseaudio   "https://www.freedesktop.org/software/pulseaudio/releases/pulseaudio-17.0.tar.xz"
+  # Same reasoning as the X11 stage: these configure scripts resolve their
+  # dependencies through pkg-config and their headers by absolute path, so
+  # the staging tree has to be the prefix. PKG_CONFIG_PATH is what lets
+  # pango find cairo and gtk find both; without it every one of them
+  # silently configures with its optional dependencies switched off.
+  export PKG_CONFIG_PATH="$TGT/usr/lib/pkgconfig:$TGT/usr/share/pkgconfig:${PKG_CONFIG_PATH:-}"
+  export PKG_CONFIG_SYSROOT_DIR=""
+  export CFLAGS="-I$TGT/usr/include $CFLAGS"
+  export LDFLAGS="-L$TGT/usr/lib $LDFLAGS"
+
+  build_gnu_staged glib      "https://download.gnome.org/sources/glib/2.80/glib-2.80.4.tar.xz" \
+    --disable-modular-tests --with-pcre=internal --disable-dtrace
+  build_gnu_staged libffi    "https://github.com/libffi/libffi/releases/download/v3.4.6/libffi-3.4.6.tar.gz"
+  build_gnu_staged pixman    "https://www.cairographics.org/releases/pixman-0.42.2.tar.gz"
+  build_gnu_staged libpng    "https://download.sourceforge.net/libpng/libpng-1.6.43.tar.xz"
+  build_gnu_staged freetype  "https://download.savannah.gnu.org/releases/freetype/freetype-2.13.2.tar.xz" \
+    --disable-gtk-doc
+  build_gnu_staged fontconfig "https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.14.2.tar.xz"
+  build_gnu_staged expat     "https://github.com/libexpat/libexpat/releases/download/R_2_6_2/expat-2.6.2.tar.xz"
+  build_gnu_staged zlib      "https://zlib.net/zlib-1.3.1.tar.gz"
+  build_gnu_staged libbzip2  "https://sourceware.org/pub/libbzip2/bzip2-1.0.8.tar.gz"
+  build_gnu_staged brotli    "https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz" \
+    --disable-static
+  build_gnu_staged harfbuzz  "https://github.com/harfbuzz/harfbuzz/releases/download/8.5.0/harfbuzz-8.5.0.tar.xz" \
+    --disable-static --without-icu --without-glib --without-freetype
+  build_gnu_staged fribidi    "https://github.com/fribidi/fribidi/releases/download/v1.0.13/fribidi-1.0.13.tar.xz"
+  build_gnu_staged cairo     "https://www.cairographics.org/releases/cairo-1.18.0.tar.xz" \
+    --disable-static --enable-xlib --enable-ft --enable-fc
+  build_gnu_staged pango     "https://download.gnome.org/sources/pango/1.54/pango-1.54.0.tar.xz" \
+    --disable-static --without-gtk --without-qt --without-x --with-cairo
+  build_gnu_staged gdk-pixbuf "https://download.gnome.org/sources/gdk-pixbuf/2.42/gdk-pixbuf-2.42.12.tar.xz" \
+    --disable-static --disable-png --disable-jpeg --disable-tiff --disable-gif
+  build_gnu_staged atk       "https://download.gnome.org/sources/atk/1.34/atk-1.34.0.tar.xz"
+  build_gnu_staged at-spi2-core "https://download.gnome.org/sources/at-spi2-core/2.50/at-spi2-core-2.50.4.tar.xz"
+  build_gnu_staged dbus      "https://dbus.freedesktop.org/releases/dbus-1.14.10.tar.xz" \
+    --disable-doxygen-docs --without-systemd --disable-apparmor
+  build_gnu_staged libnotify "https://download.gnome.org/sources/libnotify/0.8/libnotify-0.8.3.tar.xz"
+  build_gnu_staged gtk+3     "https://download.gnome.org/sources/gtk/3.24/gtk-3.24.43.tar.xz" \
+    --disable-static --enable-x11 --disable-wayland-backend \
+    --disable-cups --disable-cloud-print --disable-colord --disable-gtk-doc \
+    --disable-man-pages --disable-introspection --without-libsodium
   stamp_set "$WORK/gtk.stamp" "$SELF"
 }
 
