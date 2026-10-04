@@ -499,8 +499,8 @@ build_x11() {
     echo "x11: already built, skipping"; return
   fi
   echo "==> X11"
-  # X11 configure scripts need explicit --x-includes/--x-libraries
-  # because they don't understand --prefix=/usr the way GNU tools do
+  # X11 configure looks for a literal /X11 directory. Create a symlink.
+  [ -e /X11 ] || ln -s /usr /X11
   build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz" \
     --x-includes=/usr/include --x-libraries=/usr/lib
   build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz" \
