@@ -501,6 +501,8 @@ build_x11() {
   echo "==> X11"
   # X11 configure looks for a literal /X11 directory. Create a symlink.
   [ -e /X11 ] || ln -s /usr /X11
+  # xorgproto provides keysymdef.h and other protocol headers
+  build_gnu xorgproto    "https://www.x.org/releases/individual/proto/xorgproto-2024.1.tar.xz"
   build_gnu libX11        "https://www.x.org/releases/individual/lib/libX11-1.8.10.tar.xz" \
     --x-includes=/usr/include --x-libraries=/usr/lib
   build_gnu libXext       "https://www.x.org/releases/individual/lib/libXext-1.3.6.tar.xz" \
